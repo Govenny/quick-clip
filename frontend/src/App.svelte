@@ -1,7 +1,6 @@
 <script>
     import { onMount, tick } from 'svelte';
     import { fade, fly} from 'svelte/transition';
-    // 注意：请确认 wailsjs 的路径是否正确，根据你的项目结构调整
     import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
     import TreeItem from './components/TreeItem.svelte';
 
@@ -59,22 +58,18 @@
         const { key } = event;
 
         if (key === 'Enter') {
-            event.preventDefault(); // 阻止默认提交行为
+            event.preventDefault();
 
             if (isTitleInput) {
-                // 标题输入框：回车→聚焦到值输入框
                 textInputRef?.focus();
             } else {
-                // 值输入框：回车→如果表单有效则确认
                 if (isFormValid) {
                     confirmAddText();
                 }
             }
         } else if (key === 'Escape') {
-            // ESC键：取消
             cancelAddText();
         } else if (key === 'Tab' && isTitleInput) {
-            // 标题输入框按Tab：跳到值输入框
             if (event.shiftKey === false) {
                 event.preventDefault();
                 textInputRef?.focus();
@@ -84,7 +79,6 @@
 
     function confirmAddText() {
         if (!isFormValid) {
-            // 可以显示错误提示
             if (!titleName.trim()) {
                 titleInputRef?.focus();
                 alert("请输入名称");
@@ -98,7 +92,6 @@
         data = [...data, newDir];
         updateData(data);
 
-        // 清理并关闭
         titleName = "";
         textName = "";
         showTextInput = false;
@@ -116,10 +109,9 @@
     }
 
     function addDir() {
-        // 显示目录名称输入弹窗
         showDirInput = true;
-        dirName = ""; // 清空输入框
-        showMenu = false; // 关闭菜单
+        dirName = "";
+        showMenu = false;
 
         tick().then(() => {
             if (dirInputRef) {
@@ -131,12 +123,10 @@
     function confirmAddDir() {
         const dirNameTrim = dirName.trim()
         if (dirName.trim() !== "") {
-            // 创建一个新的目录对象，名称为用户输入，值为空数组
             const newDir = { [dirNameTrim]: [] };
             data = [...data, newDir];
             updateData(data);
         }
-        // 关闭弹窗
         showDirInput = false;
         dirName = "";
     }
@@ -146,11 +136,9 @@
         dirName = "";
     }
 
-    // 更新函数，TreeItem 会调用此函数更新 data
     function updateData(newData) {
         data = newData;
-        SaveContent(data)
-        // 如果需要持久化到后端，可以在这里调用 SaveContent(data) 等方法
+        SaveContent(data);
     }
 </script>
 
@@ -162,41 +150,39 @@
     Quick-Clip
 </h3>
 <div class="app-container" class:has-hover={isHovered}>
-    <div class="top-controls">
-      <button class="add-btn" on:click={toggleMenu}>+</button>
-      {#if showMenu}
-        <div class="add-menu" transition:fade={{duration: 100}}>
-          <button on:click={addText}>添加文本</button>
-          <button on:click={addDir}>添加目录</button>
+    <!-- 使用 sticky 容器包裹顶部控件 -->
+    <div class="sticky-header">
+        <div class="top-controls">
+            <button class="add-btn" on:click={toggleMenu}>+</button>
+            {#if showMenu}
+                <div class="add-menu" transition:fade={{duration: 100}}>
+                    <button on:click={addText}>添加文本</button>
+                    <button on:click={addDir}>添加目录</button>
+                </div>
+            {/if}
+            <input type="search" class="search-input" placeholder="搜索...">
         </div>
-      {/if}
-      <input type="search" class="search-input" placeholder="搜索...">
     </div>
-    {#if data.length === 0}
-        <p class="loading">Loading...</p>
-    {:else}
-        <ul class="content-list">
-            {#each data as item, index (index)}
-                <!-- 
-                     重要修改：
-                     1. 传递 index={index}，让组件知道自己在数组中的位置。
-                     2. 添加 (index) 作为 each 的 key，或者最好使用 unique ID。
-                        如果没有 ID，使用 index 配合拖拽可能会有轻微副作用，但对于简单数组重排通常是有效的。
-                        为了让动画和状态保持更佳，如果你的数据有唯一ID最好用 `(item.id)`。
-                        既然这里没有ID，暂时用 `(item)` 或者 `(index)`。
-                -->
-                <TreeItem 
-                    itemKey={index.toString()} 
-                    value={item} 
-                    {data} 
-                    {updateData} 
-                    {expanded} 
-                    {toggleExpand} 
-                    index={index} 
-                />
-            {/each}
-        </ul>
-    {/if}
+    
+    <div class="content-scrollable">
+        {#if data.length === 0}
+            <p class="loading">Loading...</p>
+        {:else}
+            <ul class="content-list">
+                {#each data as item, index (index)}
+                    <TreeItem 
+                        itemKey={index.toString()} 
+                        value={item} 
+                        {data} 
+                        {updateData} 
+                        {expanded} 
+                        {toggleExpand} 
+                        index={index} 
+                    />
+                {/each}
+            </ul>
+        {/if}
+    </div>
 </div>
 
 <!-- 新增：目录名称输入弹窗 -->
@@ -276,18 +262,19 @@
         border-radius: 6px;
         border: 1px solid rgba(0, 0, 0, 0.1);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        padding: 1.5% 2% 30px;
         width: 600px;
         max-width: 600px;
         text-align: left;
         transition: all 0.3s ease;
-        overflow: auto;
         margin: 0 auto;
         position: relative;
         z-index: 2;
-        /* 建议给一个最大高度，不然无限长 */
         max-height: 80vh;
         transform: translateY(0);
+        /* 修改为 flex 布局 */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* 防止整个容器滚动 */
     }
 
     .app-container.has-hover {
@@ -302,14 +289,38 @@
         text-align: center;
         font-size: 1.2rem;
         color: #666;
+        padding: 20px;
+    }
+
+    /* 新增：sticky 头部容器 */
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        padding: 1.5% 2% 0;
+        /* 添加底部边框作为分隔线 */
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        /* 添加轻微的阴影，增强视觉分离效果 */
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 可滚动内容区域 */
+    .content-scrollable {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 2%;
+        /* 添加顶部 padding 来补偿 sticky 头部的高度 */
+        padding-top: 1px;
     }
 
     .content-list {
         list-style: none;
         padding: 0;
         margin: 0;
-        /* 给列表本身加一点 padding 防止拖拽时边界判定问题 */
-        padding-bottom: 20px; 
+        padding-bottom: 20px;
     }
 
     .main-title {
@@ -335,7 +346,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 5px
+        margin-bottom: 5px;
     }
 
     .add-btn {
@@ -355,6 +366,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0; /* 防止按钮被压缩 */
     }
 
     .add-btn:hover {
@@ -379,6 +391,7 @@
         outline: none;
         transition: all 0.3s ease;
         height: 30px;
+        min-width: 0; /* 防止 flex item 溢出 */
     }
 
     .search-input:focus {
@@ -402,7 +415,7 @@
         border: 1px solid rgba(0, 0, 0, 0.1);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         padding: 0 0 1px 0;
-        z-index: 10;
+        z-index: 11; /* 比 sticky-header 高 */
         min-width: 50px;
     }
 
