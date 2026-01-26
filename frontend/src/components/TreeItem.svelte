@@ -197,8 +197,7 @@
 				on:keydown={(e) => handleKeyCopy(e, val)}
 				role="button"
 				tabindex="0">
-				<span class="item-key">{key}:</span>
-				<span class="item-value">{val}</span>
+				<span class="item-key">{key}</span>
 				{#if copied}
 					<span class="copied-indicator">已复制</span>
 				{/if}
@@ -264,7 +263,6 @@
 	}
 	.item-line:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
 	
-	.item-value { margin-left: 4px; color: #666; font-family: 'Monaco', 'Menlo', monospace; font-size: 14px; font-weight: normal; }
 	.copied-indicator { margin-left: 8px; color: #28a745; font-size: 12px; font-weight: bold; animation: fadeIn 0.3s ease; }
 	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>

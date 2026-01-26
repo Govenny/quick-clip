@@ -27,9 +27,19 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	content, err := os.ReadFile("./resource.json")
-	if err != nil {
+	if os.IsNotExist(err) {
+		// 文件不存在，创建文件并写入初始数据
+		initialData := []byte("[]") // 空的JSON数组
+		err = os.WriteFile("./resource.json", initialData, 0644)
+		if err != nil {
+			return
+		}
+		content = initialData // 使用刚创建的初始数据
+	} else if err != nil {
+		// 其他读取错误
 		return
 	}
+
 	// decrypted, err := internal.DecryptBytes(content, a.keys)
 	// if err != nil {
 	// 	return

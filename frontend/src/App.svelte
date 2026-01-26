@@ -1,6 +1,6 @@
 <script>
-    import { onMount } from 'svelte';
-    import { fade } from 'svelte/transition';
+    import { onMount, tick } from 'svelte';
+    import { fade, fly} from 'svelte/transition';
     // 注意：请确认 wailsjs 的路径是否正确，根据你的项目结构调整
     import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
     import TreeItem from './components/TreeItem.svelte';
@@ -10,19 +10,23 @@
     let showMenu = false;
     let isHovered = false;
 
+    // 添加目录
+    let showDirInput = false;
+    let dirName = "";
+    let dirInputRef; 
+
+    // 添加文本
+    let showTextInput = false;
+    let titleName = "";
+    let titleInputRef;
+    let textName = "";
+    let textInputRef;
+
     onMount(async () => {
         try {
             data = await GetContent();
         } catch (error) {
             console.error('Failed to load content:', error);
-            // 测试用数据
-            /*
-            data = [
-                { "test1": "test1" },
-                { "test2": [ { "test21": "test21" }, { "test22": "test22" } ] },
-                { "test3": "test3" }
-            ];
-            */
         }
     });
 
@@ -35,15 +39,111 @@
     }
 
     function addText() {
-        data = [...data, "新文本"];
-        updateData(data);
+        showTextInput = true;
+        titleName = "";
+        textName = "";
         showMenu = false;
+
+        tick().then(() => {
+            if (titleInputRef) {
+                titleInputRef.focus();
+            }
+        });
+    }
+
+    // 表单验证
+    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "";
+
+    // 键盘事件处理函数
+    function handleKeyDown(event, isTitleInput) {
+        const { key } = event;
+
+        if (key === 'Enter') {
+            event.preventDefault(); // 阻止默认提交行为
+
+            if (isTitleInput) {
+                // 标题输入框：回车→聚焦到值输入框
+                textInputRef?.focus();
+            } else {
+                // 值输入框：回车→如果表单有效则确认
+                if (isFormValid) {
+                    confirmAddText();
+                }
+            }
+        } else if (key === 'Escape') {
+            // ESC键：取消
+            cancelAddText();
+        } else if (key === 'Tab' && isTitleInput) {
+            // 标题输入框按Tab：跳到值输入框
+            if (event.shiftKey === false) {
+                event.preventDefault();
+                textInputRef?.focus();
+            }
+        }
+    }
+
+    function confirmAddText() {
+        if (!isFormValid) {
+            // 可以显示错误提示
+            if (!titleName.trim()) {
+                titleInputRef?.focus();
+                alert("请输入名称");
+            } else if (!textName) {
+                textInputRef?.focus();
+                alert("请输入值");
+            }
+            return;
+        }
+        const newDir = { [titleName.trim()]: textName };
+        data = [...data, newDir];
+        updateData(data);
+
+        // 清理并关闭
+        titleName = "";
+        textName = "";
+        showTextInput = false;
+    }
+
+    function cancelAddText() {
+        titleName = "";
+        textName = "";
+        showTextInput = false;
+    }
+
+    // 自动聚焦
+    $: if (showTextInput && titleInputRef) {
+        setTimeout(() => titleInputRef.focus(), 0);
     }
 
     function addDir() {
-        data = [...data, { "新目录": [] }];
-        updateData(data);
-        showMenu = false;
+        // 显示目录名称输入弹窗
+        showDirInput = true;
+        dirName = ""; // 清空输入框
+        showMenu = false; // 关闭菜单
+
+        tick().then(() => {
+            if (dirInputRef) {
+                dirInputRef.focus();
+            }
+        });
+    }
+
+    function confirmAddDir() {
+        const dirNameTrim = dirName.trim()
+        if (dirName.trim() !== "") {
+            // 创建一个新的目录对象，名称为用户输入，值为空数组
+            const newDir = { [dirNameTrim]: [] };
+            data = [...data, newDir];
+            updateData(data);
+        }
+        // 关闭弹窗
+        showDirInput = false;
+        dirName = "";
+    }
+
+    function cancelAddDir() {
+        showDirInput = false;
+        dirName = "";
     }
 
     // 更新函数，TreeItem 会调用此函数更新 data
@@ -54,7 +154,13 @@
     }
 </script>
 
-<h3 class="main-title" on:mouseenter={() => isHovered = true} on:mouseleave={() => isHovered = false}>Quick-Clip</h3>
+<h3 class="main-title" 
+    on:mouseenter={() => isHovered = true} 
+    on:mouseleave={() => isHovered = false}
+    class:has-hover={isHovered}
+    style="pointer-events: auto;">
+    Quick-Clip
+</h3>
 <div class="app-container" class:has-hover={isHovered}>
     <div class="top-controls">
       <button class="add-btn" on:click={toggleMenu}>+</button>
@@ -93,6 +199,75 @@
     {/if}
 </div>
 
+<!-- 新增：目录名称输入弹窗 -->
+{#if showDirInput}
+    <div class="modal-overlay" on:keyup={cancelAddDir} transition:fade={{duration: 50}}>
+        <div class="dir-input-modal" 
+        on:keyup|stopPropagation 
+        transition:fly={{ 
+                 y: -15, 
+                 duration: 100
+             }}>
+            <input 
+                type="text" 
+                bind:value={dirName}
+                bind:this={dirInputRef}
+                placeholder="目录名称"
+                on:keydown={(e) => {
+                    if (e.key === 'Enter') confirmAddDir();
+                    if (e.key === 'Escape') cancelAddDir();
+                }}
+            />
+            <div class="modal-buttons">
+                <button class="cancel-btn" on:click={cancelAddDir}>取消</button>
+                <button class="confirm-btn" on:click={confirmAddDir} disabled={!dirName.trim()}>确定</button>
+            </div>
+        </div>
+    </div>
+{/if}
+
+{#if showTextInput}
+    <!-- 点击遮罩层关闭 -->
+    <div class="modal-overlay"
+         on:keydown={cancelAddText}
+         transition:fade={{duration: 50}}>
+
+        <!-- 内容区域：阻止点击冒泡 -->
+        <div class="dir-input-modal"
+             on:keydown|stopPropagation
+             transition:fly={{ y: -15, duration: 100 }}>
+
+            <!-- 标题输入框 -->
+            <input
+                type="text"
+                bind:value={titleName}
+                bind:this={titleInputRef}
+                placeholder="名称"
+                on:keydown={(e) => handleKeyDown(e, true)}
+            />
+
+            <!-- 值输入框 -->
+            <input
+                type="text"
+                bind:value={textName}
+                bind:this={textInputRef}
+                placeholder="值"
+                on:keydown={(e) => handleKeyDown(e, false)}
+            />
+
+            <!-- 按钮组 -->
+            <div class="modal-buttons">
+                <button class="cancel-btn" on:click={cancelAddText}>取消</button>
+                <button class="confirm-btn"
+                        on:click={confirmAddText}
+                        disabled={!isFormValid}>
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
+
 <style>
     .app-container {
         background: rgba(255, 255, 255, 0.8);
@@ -101,7 +276,7 @@
         border-radius: 6px;
         border: 1px solid rgba(0, 0, 0, 0.1);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        padding: 40px 2% 30px;
+        padding: 1.5% 2% 30px;
         width: 600px;
         max-width: 600px;
         text-align: left;
@@ -117,6 +292,10 @@
 
     .app-container.has-hover {
         transform: translateY(20px);
+    }
+
+    .main-title.has-hover {
+        transform: translateX(-50%) translateY(5px);
     }
 
     .loading {
@@ -137,7 +316,7 @@
         position: absolute;
         top: 5px;
         left: 50%; 
-        transform: translateX(-50%);
+        transform: translateX(-50%) translateY(0);
         width: fit-content; 
         white-space: nowrap; 
         overflow: hidden;    
@@ -148,7 +327,8 @@
         margin: 0;
         z-index: 1;
         min-width: 100px;
-        pointer-events: none;
+        pointer-events: auto;
+        transition: all 0.3s ease;
     }
 
     .top-controls {
@@ -237,10 +417,102 @@
         font-family: inherit;
         font-size: 14px;
         cursor: pointer;
-        transition: background 0.2s;
     }
 
     .add-menu button:hover {
         background: rgba(0, 0, 0, 0.05);
+    }
+
+    /* 新增：弹窗样式 */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .dir-input-modal {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 5px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        padding: 8px;
+        width: 200px;
+        max-width: 90%;
+    }
+
+    .dir-input-modal input {
+        width: 100%;
+        padding: 2.5px 2.5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        font-family: inherit;
+        font-size: 13px;
+        color: #333;
+        outline: none;
+        transition: all 0.2s ease;
+        margin-bottom: 6px;
+        box-sizing: border-box;
+    }
+
+    .dir-input-modal input:focus {
+        border-color: rgba(0, 0, 0, 0.25);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    .modal-buttons button {
+        padding: 5px 5px;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        font-family: inherit;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 60px;
+    }
+
+    .cancel-btn {
+        background: rgba(255, 255, 255, 0.8);
+        color: #666;
+    }
+
+    .cancel-btn:hover {
+        background: rgba(255, 255, 255, 1);
+        color: #333;
+    }
+
+    .confirm-btn {
+        background: rgba(37, 99, 235, 0.9);
+        color: white;
+        border-color: rgba(37, 99, 235, 0.3);
+    }
+
+    .confirm-btn:hover:not(:disabled) {
+        background: rgba(37, 99, 235, 1);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .confirm-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 </style>
