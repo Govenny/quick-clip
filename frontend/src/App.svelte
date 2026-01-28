@@ -2,6 +2,7 @@
     import { onMount, tick } from 'svelte';
     import { fade, fly} from 'svelte/transition';
     import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
+    import { Quit    } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
 
     let data = [];
@@ -145,6 +146,12 @@
 <h3 class="main-title" 
     on:mouseenter={() => isHovered = true} 
     on:mouseleave={() => isHovered = false}
+    on:click={() => Quit()}
+    on:keydown={event => {
+        if (event.key === 'Escape') {
+            Quit();
+        }
+    }}
     class:has-hover={isHovered}
     style="pointer-events: auto;">
     Quick-Clip
@@ -304,7 +311,7 @@
         /* 添加底部边框作为分隔线 */
         border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         /* 添加轻微的阴影，增强视觉分离效果 */
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 2px rgba(194, 194, 194, 0.204);
     }
 
     /* 可滚动内容区域 */
@@ -313,7 +320,7 @@
         overflow-y: auto;
         padding: 0 2%;
         /* 添加顶部 padding 来补偿 sticky 头部的高度 */
-        padding-top: 1px;
+        padding-top: 6px;
     }
 
     .content-list {

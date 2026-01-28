@@ -1,18 +1,21 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"quick-clip/internal"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	// Create an instance of the app structure
+	trayMgr := internal.NewTrayManager()
 	app := NewApp()
 
 	// Create application with options
@@ -24,8 +27,27 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		OnBeforeClose: func(ctx context.Context) (prevent bool) {
+			// 如果不是通过托盘点击“退出”的，就只隐藏窗口，不关闭
+			if !trayMgr.IsQuitting() {
+				runtime.WindowHide(ctx) // 隐藏窗口（任务栏图标也会消失）
+				return true             // 返回 true 阻止默认的关闭行为
+			}
+			return false // 返回 false 允许关闭
+		},
+		OnStartup: func(ctx context.Context) {
+			// 如果你有 App 的 startup 逻辑，先执行
+			app.startup(ctx)
+
+			// 启动托盘
+			trayMgr.Run(ctx)
+
+			runtime.EventsOn(ctx, "wails:window:lostfocus", func(optionalData ...interface{}) {
+				// 这里的 ctx 是 OnStartup 传进来的 ctx
+				runtime.WindowHide(ctx)
+			})
+		},
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

@@ -66,6 +66,8 @@ func (a *App) CloseAll(data []any) {
 	byteData, err := json.Marshal(data)
 	if err != nil {
 		return
+	} else if byteData == nil {
+		return
 	}
 	// resource, err := internal.EncryptBytes(byteData, a.keys)
 	// if err != nil {
