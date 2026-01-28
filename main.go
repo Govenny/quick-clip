@@ -38,14 +38,8 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			// 如果你有 App 的 startup 逻辑，先执行
 			app.startup(ctx)
-
-			// 启动托盘
 			trayMgr.Run(ctx)
 
-			runtime.EventsOn(ctx, "wails:window:lostfocus", func(optionalData ...interface{}) {
-				// 这里的 ctx 是 OnStartup 传进来的 ctx
-				runtime.WindowHide(ctx)
-			})
 		},
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{

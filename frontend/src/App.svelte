@@ -137,11 +137,34 @@
         dirName = "";
     }
 
+    // 焦点--------------------------------------------
+    let lastFocusTime = 0;
+
+    function handleFocus() {
+        lastFocusTime = Date.now();
+    }
+
+    function handleBlur() {
+        const now = Date.now();
+        if (now - lastFocusTime < 200) {
+            return;
+        }else{
+            Quit();
+        }
+    }
+    // ----------------------------------------------
+
     function updateData(newData) {
         data = newData;
         SaveContent(data);
     }
+
 </script>
+
+<svelte:window 
+    on:blur={() => handleBlur()} 
+    on:focus={() => handleFocus()}
+/>
 
 <h3 class="main-title" 
     on:mouseenter={() => isHovered = true} 

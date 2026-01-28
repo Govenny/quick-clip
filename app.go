@@ -50,7 +50,7 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is about to close
 func (a *App) shutdown(ctx context.Context) {
-	a.CloseAll(a.content)
+	a.saveToFile()
 }
 
 func (a *App) GetContent() []any {
@@ -59,20 +59,22 @@ func (a *App) GetContent() []any {
 
 func (a *App) SaveContent(data []any) {
 	a.content = data
+	a.saveToFile()
 }
 
-func (a *App) CloseAll(data []any) {
-	// map -> []byte
-	byteData, err := json.Marshal(data)
+func (a *App) saveToFile() {
+	byteData, err := json.Marshal(a.content)
 	if err != nil {
 		return
 	} else if byteData == nil {
 		return
 	}
+
 	// resource, err := internal.EncryptBytes(byteData, a.keys)
 	// if err != nil {
 	// 	return
 	// }
+
 	err = os.WriteFile("./resource.json", byteData, 0644)
 	if err != nil {
 		return

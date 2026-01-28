@@ -102,6 +102,8 @@ func (tm *TrayManager) onReady() {
 	mShow.Click(func() {
 		// 显示窗口
 		runtime.WindowShow(tm.ctx)
+		runtime.WindowSetAlwaysOnTop(tm.ctx, true)
+		runtime.WindowSetAlwaysOnTop(tm.ctx, false)
 	})
 
 	mQuit.Click(func() {
@@ -114,6 +116,8 @@ func (tm *TrayManager) onReady() {
 	// 如果需要设置托盘左键点击（显示窗口）
 	systray.SetOnClick(func(menu systray.IMenu) {
 		runtime.WindowShow(tm.ctx)
+		runtime.WindowSetAlwaysOnTop(tm.ctx, true)
+		runtime.WindowSetAlwaysOnTop(tm.ctx, false)
 	})
 
 	// 托盘右键点击（显示菜单）
