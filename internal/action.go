@@ -5,16 +5,23 @@ import (
 	"github.com/tailscale/win"
 )
 
-func GetMousePosition() (x int, y int) {
+type Action struct {
+}
+
+func NewAction() *Action {
+	return &Action{}
+}
+
+func (a *Action) GetMousePosition() (x int, y int) {
 	x, y = robotgo.Location()
 	return
 }
 
-func RecordActiveWindow() (title win.HWND) {
+func (a *Action) RecordActiveWindow() (title win.HWND) {
 	title = robotgo.GetHWND()
 	return
 }
 
-func RestoreFocus(title win.HWND) {
+func (a *Action) RestoreFocus(title win.HWND) {
 	robotgo.SetFocus(title)
 }

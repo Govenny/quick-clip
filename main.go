@@ -17,6 +17,7 @@ var assets embed.FS
 func main() {
 	trayMgr := internal.NewTrayManager()
 	app := NewApp()
+	action := internal.NewAction()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -44,6 +45,7 @@ func main() {
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
+			action,
 		},
 		Frameless: true,
 		// AlwaysOnTop: true,

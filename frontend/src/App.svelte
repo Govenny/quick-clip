@@ -1,5 +1,5 @@
 <script>
-    import { onMount, tick } from 'svelte';
+    import { onMount, tick, onDestroy } from 'svelte';
     import { fade, fly} from 'svelte/transition';
     import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
     import { Quit    } from '../wailsjs/runtime';
@@ -22,12 +22,93 @@
     let textName = "";
     let textInputRef;
 
+    // 在父组件中（例如 App.svelte）
+    let globalContextMenu = {
+        visible: false,
+        x: 0,
+        y: 0,
+        targetKey: null,
+        targetValue: null
+    };
+
+    function showContextMenu(e, key, val) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        globalContextMenu = {
+            visible: true,
+            x: e.pageX,
+            y: e.pageY,
+            targetKey: key,
+            targetValue: val
+        };
+    }
+
+    function hideContextMenu() {
+        globalContextMenu.visible = false;
+    }
+
+    // 点击页面其他地方关闭菜单
+    function handleGlobalClick(e) {
+        if (!e.target.closest('.context-menu')) {
+            hideContextMenu();
+        }
+    }
+
+    function deleteItem() {
+		if (!globalContextMenu.targetKey) return;
+
+		try {
+			// 获取父级路径
+			const keys = globalContextMenu.targetKey.split(".");
+			const propertyToDelete = keys.pop(); // 要删除的属性名
+			const parentPath = keys.join(".");
+
+			let parentObj = data;
+			if (parentPath !== "") {
+				const parentKeys = parentPath.split(".");
+				for (let k of parentKeys) {
+					if (parentObj && parentObj[k] !== undefined) {
+						parentObj = parentObj[k];
+					}
+				}
+			}
+
+			// 删除属性
+			if (parentObj && parentObj.hasOwnProperty(propertyToDelete)) {
+				delete parentObj[propertyToDelete];
+
+				// 更新数据
+				if (parentPath === "") {
+					updateData({ ...data });
+				} else {
+					updateData([...data]); // 如果是数组，需要新数组引用
+				}
+			}
+
+			// 隐藏菜单
+			hideContextMenu();
+		} catch (err) {
+			console.error("删除失败", err);
+		}
+	}
+
+    onMount(() => {
+        document.addEventListener('click', handleGlobalClick);
+        document.addEventListener('contextmenu', hideContextMenu); // 右键其他地方也关闭
+    });
+
     onMount(async () => {
         try {
             data = await GetContent();
         } catch (error) {
             console.error('Failed to load content:', error);
         }
+    });
+
+    onDestroy(() => {
+        document.removeEventListener('click', handleGlobalClick);
+        document.removeEventListener('contextmenu', hideContextMenu);
     });
 
     function toggleExpand(key) {
@@ -208,12 +289,33 @@
                         {expanded} 
                         {toggleExpand} 
                         index={index} 
+                        showContextMenu={showContextMenu}
                     />
                 {/each}
             </ul>
         {/if}
     </div>
 </div>
+
+<!-- 在 App.svelte 中渲染全局菜单 -->
+{#if globalContextMenu.visible}
+  <div 
+    class="context-menu"
+    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; z-index: 9999;"
+    on:contextmenu|preventDefault>
+    <ul class="menu-list">
+      <li class="menu-item" 
+      on:click={deleteItem}
+      on:keydown={event => {
+        if (event.key === 'Enter') {
+            deleteItem();
+        }
+      }}
+      >删除</li>
+      <!-- 可以添加更多菜单项 -->
+    </ul>
+  </div>
+{/if}
 
 <!-- 新增：目录名称输入弹窗 -->
 {#if showDirInput}
@@ -438,7 +540,7 @@
         position: absolute;
         top: 30px;
         left: 0;
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 1);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border-radius: 5px;
@@ -558,4 +660,44 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
+
+    /* App.svelte 中的样式 */
+.context-menu {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  min-width: 150px;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.menu-item {
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+  width: 100%;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.menu-item:last-child {
+  color: #dc3545;
+}
+
+.menu-item:last-child:hover {
+  background-color: #f8d7da;
+  color: #721c24;
+}
 </style>
