@@ -2,7 +2,7 @@
     import { onMount, tick, onDestroy } from 'svelte';
     import { fade, fly} from 'svelte/transition';
     import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
-    import { Quit    } from '../wailsjs/runtime';
+    import { LogInfo, Quit    } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
 
     let data = [];
@@ -28,10 +28,22 @@
         x: 0,
         y: 0,
         targetKey: null,
-        targetValue: null
+        targetValue: null,
+        isFolder: false
     };
 
-    function showContextMenu(e, key, val) {
+    function cleanGlobalContextMenu() {
+        globalContextMenu = {
+            visible: false,
+            x: 0,
+            y: 0,
+            targetKey: null,
+            targetValue: null,
+            isFolder: false
+        };
+    }
+
+    function showContextMenu(e, key, val, isFolder) {
         e.preventDefault();
         e.stopPropagation();
         
@@ -40,7 +52,8 @@
             x: e.pageX,
             y: e.pageY,
             targetKey: key,
-            targetValue: val
+            targetValue: val,
+            isFolder: isFolder
         };
     }
 
@@ -88,6 +101,7 @@
 
 			// 隐藏菜单
 			hideContextMenu();
+            cleanGlobalContextMenu();
 		} catch (err) {
 			console.error("删除失败", err);
 		}
@@ -124,6 +138,7 @@
         titleName = "";
         textName = "";
         showMenu = false;
+        hideContextMenu();
 
         tick().then(() => {
             if (titleInputRef) {
@@ -170,9 +185,29 @@
             }
             return;
         }
-        const newDir = { [titleName.trim()]: textName };
-        data = [...data, newDir];
+
+        if (globalContextMenu.isFolder) {
+            // 文件夹下添加文本
+            const folderKey = globalContextMenu.targetKey.split(".")[1];
+            // 找到对应的文件夹对象并获取其键名
+            const folderObj = data.find(item => typeof item === 'object' && item[folderKey]);
+            if (folderObj) {
+                // 获取文件夹内的数组
+                const folderArray = folderObj[folderKey];
+                if (Array.isArray(folderArray)) {
+                    // 向文件夹内的数组添加新的文本项
+                    folderArray.push({ [titleName.trim()]: textName });
+                }
+            }
+        } else {
+            // 根目录添加文本
+            const newDir = { [titleName.trim()]: textName };
+            data = [...data, newDir];
+        }
+
+        
         updateData(data);
+        cleanGlobalContextMenu();
 
         titleName = "";
         textName = "";
@@ -183,6 +218,7 @@
         titleName = "";
         textName = "";
         showTextInput = false;
+        cleanGlobalContextMenu();
     }
 
     // 自动聚焦
@@ -194,6 +230,7 @@
         showDirInput = true;
         dirName = "";
         showMenu = false;
+        hideContextMenu();
 
         tick().then(() => {
             if (dirInputRef) {
@@ -203,19 +240,38 @@
     }
 
     function confirmAddDir() {
-        const dirNameTrim = dirName.trim()
+        const dirNameTrim = dirName.trim();
         if (dirName.trim() !== "") {
-            const newDir = { [dirNameTrim]: [] };
-            data = [...data, newDir];
+            if (globalContextMenu.isFolder) {
+                // 在文件夹内添加新文件夹
+                const folderKey = globalContextMenu.targetKey.split(".")[1];
+                // 找到对应的文件夹对象
+                const folderObj = data.find(item => typeof item === 'object' && item[folderKey]);
+                if (folderObj) {
+                    // 获取文件夹内的数组
+                    const folderArray = folderObj[folderKey];
+                    if (Array.isArray(folderArray)) {
+                        // 向文件夹内的数组添加新的文件夹项
+                        const newDir = { [dirNameTrim]: [] };
+                        folderArray.push(newDir);
+                    }
+                }
+            } else {
+                // 在根目录添加文件夹
+                const newDir = { [dirNameTrim]: [] };
+                data = [...data, newDir];
+            }
+            
             updateData(data);
         }
         showDirInput = false;
-        dirName = "";
+        cleanGlobalContextMenu();
     }
 
     function cancelAddDir() {
         showDirInput = false;
         dirName = "";
+        cleanGlobalContextMenu();
     }
 
     // 焦点--------------------------------------------
@@ -304,6 +360,27 @@
     style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; z-index: 9999;"
     on:contextmenu|preventDefault>
     <ul class="menu-list">
+      
+      {#if globalContextMenu.isFolder}
+        <li class="menu-item" 
+        on:click={addText}
+        on:keydown={event => {
+          if (event.key === 'Enter') {
+              addText();
+          }
+        }}
+        >添加文本</li>
+
+        <li class="menu-item" 
+        on:click={addDir}
+        on:keydown={event => {
+          if (event.key === 'Enter') {
+              addDir();
+          }
+        }}
+        >添加目录</li>
+      {/if}
+
       <li class="menu-item" 
       on:click={deleteItem}
       on:keydown={event => {

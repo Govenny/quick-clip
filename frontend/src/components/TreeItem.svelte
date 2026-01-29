@@ -1,6 +1,5 @@
 <script>
 	import { slide } from "svelte/transition";
-	import { GetMousePosition } from "../../wailsjs/go/internal/Action";
 	import { LogInfo } from "../../wailsjs/runtime/runtime";
 
 	// props
@@ -160,8 +159,8 @@
 	export let showContextMenu;
 
 	// 右键点击处理
-	function handleContextMenu(e, key, val) {
-		showContextMenu(e, key, val);
+	function handleContextMenu(e, key, val, isFolder) {
+		showContextMenu(e, key, val, isFolder);
 	}
 </script>
 
@@ -184,7 +183,7 @@
 				class="folder-btn"
 				on:click={() => toggleExpand(itemKey + "." + key)}
 				on:contextmenu={(e) =>
-					handleContextMenu(e, itemKey + "." + key, val)}
+					handleContextMenu(e, itemKey + "." + key, val, true)}
 			>
 				<span class="icon"
 					>{expanded[itemKey + "." + key] ? "📂" : "📁"}</span
@@ -223,7 +222,7 @@
 				on:click={() => copyToClipboard(val)}
 				on:keydown={(e) => handleKeyCopy(e, val)}
 				on:contextmenu={(e) =>
-					handleContextMenu(e, itemKey + "." + key, val)}
+					handleContextMenu(e, itemKey + "." + key, val, false)}
 				role="button"
 				tabindex="0"
 			>
