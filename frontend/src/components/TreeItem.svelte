@@ -185,9 +185,13 @@
 				on:contextmenu={(e) =>
 					handleContextMenu(e, itemKey + "." + key, val, true)}
 			>
-				<span class="icon"
-					>{expanded[itemKey + "." + key] ? "📂" : "📁"}</span
-				>
+				<span class="icon">
+					<img
+						class="catalog-icon"
+						src={expanded[itemKey + "." + key] ? "/src/assets/images/catalog-expand.png" : "/src/assets/images/catalog.png"}
+						alt={expanded[itemKey + "." + key] ? "收起" : "展开"}
+					/>
+				</span>
 				<span class="label">{key}</span>
 				<span class="drag-handle" title="拖拽排序">⋮⋮</span>
 			</button>
@@ -211,6 +215,7 @@
 							{expanded}
 							{toggleExpand}
 							index={subIndex}
+							showContextMenu={showContextMenu}
 						/>
 					{/each}
 				</ul>
@@ -238,9 +243,9 @@
 </li>
 
 <style>
-	/* --- 样式部分保持一致 --- */
+	/* --- 拖拽相关保持原样，功能性样式不动 --- */
 	.tree-item.drag-over-active {
-		border-top: 2px solid #007bff;
+		border-top: 2px solid #3b82f6; /* 改用更现代的蓝色 */
 		margin-top: -2px;
 		z-index: 10;
 		position: relative;
@@ -248,112 +253,133 @@
 
 	.tree-item.dragging {
 		opacity: 0.4;
+		background: #f0f0f0;
 	}
 
-	.drag-handle {
-		margin-left: auto;
-		padding: 2px 8px;
-		color: #ddd;
-		cursor: grab;
-		font-size: 16px;
-		font-weight: bold;
-		line-height: 1;
-		user-select: none;
-		transition: color 0.2s;
-	}
-
-	.folder-btn:hover .drag-handle,
-	.item-line:hover .drag-handle {
-		color: #888;
-	}
-
+	/* --- 容器 --- */
 	.tree-item {
-		margin: 1.5px 0;
-		transition: all 0.2s ease;
-		line-height: 1.3;
+		margin: 0; /* 去掉外边距，让列表连续 */
+		padding: 0;
+		line-height: 1.4;
 		list-style: none;
+		user-select: none; /* 防止双击时不小心选中文字 */
 	}
 
-	.folder-btn {
-		background: rgba(255, 255, 255, 0.9);
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 14px;
-		display: flex;
-		align-items: center;
-		padding: 6px 12px;
-		width: 100%;
-		text-align: left;
-		transition: all 0.3s ease;
-		box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-		color: #333;
-		font-weight: normal;
-	}
-	.folder-btn:hover {
-		background: rgba(255, 255, 255, 1);
-		transform: translateY(-1px);
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-	}
-
-	.icon {
-		margin-right: 8px;
-		font-size: 16px;
-		transition: transform 0.3s ease;
-	}
-	.label {
-		flex: 1;
-		font-weight: normal;
-		color: #333;
-	}
-
-	.nested-list {
-		margin-left: 2px;
-		padding-left: 2px;
-		border-left: 1px solid rgba(0, 0, 0, 0.1);
-		list-style: none;
-		margin-top: 2px;
-	}
-
-	.item-key {
-		font-weight: normal;
-		color: #333;
-		font-size: 14px;
-	}
-
+	/* --- 通用行样式 (文件夹按钮 和 文本行) --- */
+	/* 核心改动：去掉白底阴影，改为透明底+Hover变色 */
+	.folder-btn,
 	.item-line {
 		display: flex;
 		align-items: center;
-		padding: 6px 12px;
-		background: rgba(255, 255, 255, 0.7);
-		backdrop-filter: blur(5px);
-		border-radius: 4px;
-		margin: 1.5px 0;
-		transition: all 0.3s ease;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-		font-size: 14px;
-		line-height: 1.3;
+		width: 100%;
+		padding: 3px 8px; /* 极致压缩：上下3px */
+		margin: 1px 0;    /* 极小间距 */
+		background: transparent; /* 默认透明 */
+		border: none;
+		border-radius: 4px;      /* 微圆角 */
 		cursor: pointer;
-	}
-	.item-line:hover {
-		background: rgba(255, 255, 255, 0.9);
-		transform: translateY(-1px);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		font-size: 13px;         /* 配合主界面的小字体 */
+		color: #333;
+		text-align: left;
+		transition: background-color 0.1s ease, color 0.1s;
+		box-shadow: none; /* 去掉阴影 */
 	}
 
-	.copied-indicator {
-		margin-left: 8px;
-		color: #28a745;
-		font-size: 12px;
-		font-weight: bold;
-		animation: fadeIn 0.3s ease;
+	/* --- 鼠标悬停效果 --- */
+	/* 像 VS Code 一样，悬停时给一个整行高亮 */
+	.folder-btn:hover,
+	.item-line:hover {
+		background-color: rgba(0, 0, 0, 0.06); /* 浅灰背景 */
+		transform: none; /* 去掉位移，防止列表抖动 */
+		box-shadow: none;
+		color: #000;
 	}
+
+	/* --- 文件夹特有样式 --- */
+	.folder-btn {
+		font-weight: 500; /* 文件夹稍微加粗一点点区分 */
+		color: #444;
+	}
+
+	/* 图标微调 */
+	.icon {
+		margin-right: 6px;
+		font-size: 14px; /* 图标也调小 */
+		color: #666;     /* 灰色图标比黄色更高级 */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;     /* 固定宽度对齐 */
+	}
+
+	.catalog-icon {
+		width: 16px;
+		height: 16px;
+		margin-left: 4px;
+		margin-right: 4px;
+		vertical-align: middle;
+		filter: brightness(0.8); /* 如果需要调整颜色深浅 */
+	}
+
+	/* --- 文本特有样式 --- */
+	.label {
+		flex: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis; /* 文字过长显示省略号 */
+		margin-right: 8px;
+	}
+
+	.item-key {
+		color: #333;
+		margin-right: 6px; /* 键值对之间的间距 */
+		font-weight: 500;
+	}
+    
+	/* --- 嵌套缩进 --- */
+	.nested-list {
+		margin-left: 10px; /* 缩进不需要太大 */
+		padding-left: 10px;
+		border-left: 1px solid rgba(0, 0, 0, 0.08); /* 极细的引导线 */
+		list-style: none;
+		margin-top: 0;
+		margin-bottom: 0;
+	}
+
+	/* --- 拖拽手柄 --- */
+	.drag-handle {
+		margin-left: auto;
+		padding: 0 4px;
+		color: transparent; /* 默认隐藏，看起来更干净 */
+		cursor: grab;
+		font-size: 12px;
+		display: flex;
+		align-items: center;
+	}
+
+	/* 只有鼠标悬停在整行时，才显示拖拽手柄 */
+	.folder-btn:hover .drag-handle,
+	.item-line:hover .drag-handle {
+		color: #bbb; /* 淡淡的灰色 */
+	}
+	
+	.drag-handle:hover {
+		color: #666 !important;
+	}
+
+	/* --- 复制成功提示 --- */
+	.copied-indicator {
+		margin-left: auto; /* 靠右显示 */
+		padding-left: 8px;
+		color: #10b981;    /* 绿色 */
+		font-size: 11px;
+		font-weight: 500;
+		animation: fadeIn 0.2s ease;
+        white-space: nowrap;
+	}
+
 	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
+		from { opacity: 0; transform: translateX(5px); }
+		to { opacity: 1; transform: translateX(0); }
 	}
 </style>

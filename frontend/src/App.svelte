@@ -188,7 +188,8 @@
 
         if (globalContextMenu.isFolder) {
             // 文件夹下添加文本
-            const folderKey = globalContextMenu.targetKey.split(".")[1];
+            const folderKey = globalContextMenu.targetKey.split(".")[-1];
+            LogInfo(globalContextMenu.targetKey)
             // 找到对应的文件夹对象并获取其键名
             const folderObj = data.find(item => typeof item === 'object' && item[folderKey]);
             if (folderObj) {
@@ -298,44 +299,52 @@
 
 </script>
 
+
 <svelte:window 
     on:blur={() => handleBlur()} 
     on:focus={() => handleFocus()}
 />
 
-<h3 class="main-title" 
-    on:mouseenter={() => isHovered = true} 
-    on:mouseleave={() => isHovered = false}
-    on:click={() => Quit()}
-    on:keydown={event => {
-        if (event.key === 'Escape') {
-            Quit();
-        }
-    }}
-    class:has-hover={isHovered}
-    style="pointer-events: auto;">
-    Quick-Clip
-</h3>
-<div class="app-container" class:has-hover={isHovered}>
-    <!-- 使用 sticky 容器包裹顶部控件 -->
+<!-- 整体容器 -->
+<div class="app-container">
+    
+    <!-- 极简头部：类似于 VS Code 或 Mac Spotlight -->
     <div class="sticky-header">
-        <div class="top-controls">
-            <button class="add-btn" on:click={toggleMenu}>+</button>
-            {#if showMenu}
-                <div class="add-menu" transition:fade={{duration: 100}}>
-                    <button on:click={addText}>添加文本</button>
-                    <button on:click={addDir}>添加目录</button>
-                </div>
-            {/if}
-            <input type="search" class="search-input" placeholder="搜索...">
+        <div class="header-row">
+            <span class="app-title" on:click={() => Quit()} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                    Quit();
+                }
+            }}>Quick
+            Clip</span>
+            
+            <div class="search-wrapper">
+                <input type="search" class="search-input" placeholder="Search...">
+            </div>
+
+            <div class="action-wrapper">
+                <button class="icon-btn add-btn" on:click={toggleMenu} title="New Item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                {#if showMenu}
+                    <div class="dropdown-menu" transition:fade={{duration: 100}}>
+                        <button on:click={addText}>文本 (Text)</button>
+                        <button on:click={addDir}>文件夹 (Folder)</button>
+                    </div>
+                {/if}
+            </div>
         </div>
     </div>
     
+    <!-- 内容区域 -->
     <div class="content-scrollable">
         {#if data.length === 0}
-            <p class="loading">Loading...</p>
+            <div class="empty-state">No Items</div>
         {:else}
-            <ul class="content-list">
+            <ul class="tree-root">
                 {#each data as item, index (index)}
                     <TreeItem 
                         itemKey={index.toString()} 
@@ -353,428 +362,339 @@
     </div>
 </div>
 
-<!-- 在 App.svelte 中渲染全局菜单 -->
+<!-- 上下文菜单 -->
 {#if globalContextMenu.visible}
   <div 
     class="context-menu"
-    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; z-index: 9999;"
+    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px;"
     on:contextmenu|preventDefault>
-    <ul class="menu-list">
-      
-      {#if globalContextMenu.isFolder}
-        <li class="menu-item" 
-        on:click={addText}
-        on:keydown={event => {
-          if (event.key === 'Enter') {
-              addText();
-          }
-        }}
-        >添加文本</li>
-
-        <li class="menu-item" 
-        on:click={addDir}
-        on:keydown={event => {
-          if (event.key === 'Enter') {
-              addDir();
-          }
-        }}
-        >添加目录</li>
-      {/if}
-
-      <li class="menu-item" 
-      on:click={deleteItem}
-      on:keydown={event => {
-        if (event.key === 'Enter') {
-            deleteItem();
-        }
-      }}
-      >删除</li>
-      <!-- 可以添加更多菜单项 -->
-    </ul>
+    {#if globalContextMenu.isFolder}
+        <div class="menu-item" on:click={addText} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                    Quit();
+                }
+            }}>New Text</div>
+        <div class="menu-item" on:click={addDir} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                    Quit();
+                }
+            }}>New Folder</div>
+        <div class="menu-divider"></div>
+    {/if}
+    <div class="menu-item delete" on:click={deleteItem} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                    Quit();
+                }
+            }}>Delete</div>
   </div>
 {/if}
 
-<!-- 新增：目录名称输入弹窗 -->
+<!-- 目录弹窗 -->
 {#if showDirInput}
-    <div class="modal-overlay" on:keyup={cancelAddDir} transition:fade={{duration: 50}}>
-        <div class="dir-input-modal" 
-        on:keyup|stopPropagation 
-        transition:fly={{ 
-                 y: -15, 
-                 duration: 100
-             }}>
-            <input 
-                type="text" 
-                bind:value={dirName}
-                bind:this={dirInputRef}
-                placeholder="目录名称"
-                on:keydown={(e) => {
-                    if (e.key === 'Enter') confirmAddDir();
-                    if (e.key === 'Escape') cancelAddDir();
-                }}
-            />
-            <div class="modal-buttons">
-                <button class="cancel-btn" on:click={cancelAddDir}>取消</button>
-                <button class="confirm-btn" on:click={confirmAddDir} disabled={!dirName.trim()}>确定</button>
-            </div>
+    <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} transition:fade={{duration: 80}}>
+        <div class="modal-box compact" on:keyup|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+            <input type="text" bind:value={dirName} bind:this={dirInputRef} placeholder="Folder Name" 
+                on:keydown={(e) => { if (e.key === 'Enter') confirmAddDir(); if (e.key === 'Escape') cancelAddDir(); }}/>
         </div>
     </div>
 {/if}
 
+<!-- 文本弹窗 -->
 {#if showTextInput}
-    <!-- 点击遮罩层关闭 -->
-    <div class="modal-overlay"
-         on:keydown={cancelAddText}
-         transition:fade={{duration: 50}}>
-
-        <!-- 内容区域：阻止点击冒泡 -->
-        <div class="dir-input-modal"
-             on:keydown|stopPropagation
-             transition:fly={{ y: -15, duration: 100 }}>
-
-            <!-- 标题输入框 -->
-            <input
-                type="text"
-                bind:value={titleName}
-                bind:this={titleInputRef}
-                placeholder="名称"
-                on:keydown={(e) => handleKeyDown(e, true)}
-            />
-
-            <!-- 值输入框 -->
-            <input
-                type="text"
-                bind:value={textName}
-                bind:this={textInputRef}
-                placeholder="值"
-                on:keydown={(e) => handleKeyDown(e, false)}
-            />
-
-            <!-- 按钮组 -->
-            <div class="modal-buttons">
-                <button class="cancel-btn" on:click={cancelAddText}>取消</button>
-                <button class="confirm-btn"
-                        on:click={confirmAddText}
-                        disabled={!isFormValid}>
-                    确定
-                </button>
+    <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} transition:fade={{duration: 80}}>
+        <div class="modal-box" on:keydown|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+            <div class="input-group">
+                <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
+                <input type="text" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
+            </div>
+            <div class="modal-footer">
+                <span class="hint">Enter to save</span>
             </div>
         </div>
     </div>
 {/if}
 
 <style>
+    /* 主容器 */
     .app-container {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 6px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        width: 600px;
-        max-width: 600px;
-        text-align: left;
-        transition: all 0.3s ease;
-        margin: 0 auto;
-        position: relative;
-        z-index: 2;
-        max-height: 80vh;
-        transform: translateY(0);
-        /* 修改为 flex 布局 */
+        width: 100vw; /* 占满窗口 */
+        height: 100vh;
+        background: rgba(255, 255, 255, 0.92); /* 略微不透明一点，提高阅读性 */
         display: flex;
         flex-direction: column;
-        overflow: hidden; /* 防止整个容器滚动 */
+        overflow: hidden;
     }
 
-    .app-container.has-hover {
-        transform: translateY(20px);
-    }
-
-    .main-title.has-hover {
-        transform: translateX(-50%) translateY(5px);
-    }
-
-    .loading {
-        text-align: center;
-        font-size: 1.2rem;
-        color: #666;
-        padding: 20px;
-    }
-
-    /* 新增：sticky 头部容器 */
+    /* --- 头部样式：极致紧凑 --- */
     .sticky-header {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background: rgba(255, 255, 255, 0.9);
+        flex-shrink: 0;
+        background: rgba(245, 245, 245, 0.85); /* 浅灰色背景区分头部 */
         backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        padding: 1.5% 2% 0;
-        /* 添加底部边框作为分隔线 */
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        /* 添加轻微的阴影，增强视觉分离效果 */
-        box-shadow: 0 2px 2px rgba(194, 194, 194, 0.204);
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        padding: 8px 10px 3px;
+        z-index: 10;
     }
 
-    /* 可滚动内容区域 */
-    .content-scrollable {
+    .header-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px; /* 强制高度 */
+    }
+
+    .app-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: #444;
+        white-space: nowrap;
+        cursor: default;
+        user-select: none;
+        margin-right: 4px;
+    }
+
+    .search-wrapper {
         flex: 1;
-        overflow-y: auto;
-        padding: 0 2%;
-        /* 添加顶部 padding 来补偿 sticky 头部的高度 */
-        padding-top: 6px;
-    }
-
-    .content-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        padding-bottom: 20px;
-    }
-
-    .main-title {
-        position: absolute;
-        top: 5px;
-        left: 50%; 
-        transform: translateX(-50%) translateY(0);
-        width: fit-content; 
-        white-space: nowrap; 
-        overflow: hidden;    
-        text-overflow: ellipsis; 
-        font-size: 1.6rem;
-        font-weight: 400;
-        color: #333;
-        margin: 0;
-        z-index: 1;
-        min-width: 100px;
-        pointer-events: auto;
-        transition: all 0.3s ease;
-    }
-
-    .top-controls {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 5px;
-    }
-
-    .add-btn {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-        color: #333;
-        font-size: 24px;
-        font-weight: 300;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0; /* 防止按钮被压缩 */
-    }
-
-    .add-btn:hover {
-        background: rgba(255, 255, 255, 1);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05);
-        transform: translateY(-2px);
+        position: relative;
     }
 
     .search-input {
-        flex: 1;
-        margin-left: 10px;
-        padding: 10px 0px 10px 8px;
+        width: 100%;
+        height: 26px;
+        border: 1px solid rgba(0,0,0,0.1);
+        background: #fff;
         border-radius: 4px;
-        background: rgba(255, 255, 255, 0.5);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-        font-family: inherit;
-        font-size: 16px;
-        color: #333;
+        padding: 0 8px;
+        font-size: 13px;
         outline: none;
-        transition: all 0.3s ease;
-        height: 30px;
-        min-width: 0; /* 防止 flex item 溢出 */
+        transition: all 0.2s;
     }
 
     .search-input:focus {
-        background: rgba(255, 255, 255, 1);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
-        border-color: rgba(0, 0, 0, 0.2);
+        border-color: #3b82f6; /* 聚焦蓝 */
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
     }
 
-    .search-input::placeholder {
-        color: #999;
+    .action-wrapper {
+        position: relative;
     }
 
-    .add-menu {
-        position: absolute;
-        top: 30px;
-        left: 0;
-        background: rgba(255, 255, 255, 1);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 5px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        padding: 0 0 1px 0;
-        z-index: 11; /* 比 sticky-header 高 */
-        min-width: 50px;
-    }
-
-    .add-menu button {
-        display: block;
-        width: 100%;
-        padding: 6px 16px;
-        background: none;
-        border: none;
-        text-align: left;
-        color: #333;
-        font-family: inherit;
-        font-size: 14px;
-        cursor: pointer;
-    }
-
-    .add-menu button:hover {
-        background: rgba(0, 0, 0, 0.05);
-    }
-
-    /* 新增：弹窗样式 */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(2px);
+    .icon-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        width: 26px;
+        height: 26px;
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        color: #555;
+        cursor: pointer;
+        transition: background 0.1s;
+        padding: 0;
     }
 
-    .dir-input-modal {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 5px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-        padding: 8px;
-        width: 200px;
-        max-width: 90%;
+    .icon-btn:hover {
+        background: rgba(0,0,0,0.06);
+        color: #000;
     }
 
-    .dir-input-modal input {
+    .icon-btn svg {
+        opacity: 0.8;
+    }
+
+    /* 下拉菜单 */
+    .dropdown-menu {
+        position: absolute;
+        top: 30px;
+        right: 0;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-radius: 6px;
+        padding: 4px;
+        min-width: 120px;
+        z-index: 100;
+    }
+
+    .dropdown-menu button {
+        display: block;
         width: 100%;
-        padding: 2.5px 2.5px;
-        border-radius: 3px;
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(0, 0, 0, 0.15);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        font-family: inherit;
+        text-align: left;
+        background: none;
+        border: none;
+        padding: 6px 12px;
         font-size: 13px;
         color: #333;
-        outline: none;
-        transition: all 0.2s ease;
-        margin-bottom: 6px;
-        box-sizing: border-box;
-    }
-
-    .dir-input-modal input:focus {
-        border-color: rgba(0, 0, 0, 0.25);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    }
-
-    .modal-buttons {
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-    }
-
-    .modal-buttons button {
-        padding: 5px 5px;
         border-radius: 4px;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        font-family: inherit;
-        font-size: 14px;
         cursor: pointer;
-        transition: all 0.2s ease;
-        min-width: 60px;
     }
 
-    .cancel-btn {
-        background: rgba(255, 255, 255, 0.8);
-        color: #666;
+    .dropdown-menu button:hover {
+        background: #3b82f6;
+        color: white;
     }
 
-    .cancel-btn:hover {
-        background: rgba(255, 255, 255, 1);
+    /* --- 列表区域 --- */
+    .content-scrollable {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 0; /* 极小内边距 */
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #999;
+        margin-top: 40px;
+        font-size: 13px;
+    }
+
+    .tree-root {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* 
+       重要：这里使用了 :global 来强制覆盖 TreeItem 内部可能的样式 
+       目标是让列表看起来像 VS Code 的侧边栏，而不是卡片
+    */
+    :global(.tree-root ul) {
+        list-style: none;
+        padding-left: 16px; /* 缩进 */
+        margin: 0;
+        border-left: 1px solid rgba(0,0,0,0.05); /* 淡淡的引导线 */
+    }
+
+    :global(.tree-root li) {
+        margin: 0;
+        padding: 0;
+    }
+
+    /* 模拟 TreeItem 内容行的样式 (你需要确保 TreeItem 内部结构能匹配或调整) */
+    :global(.tree-item-content) {
+        display: flex;
+        align-items: center;
+        padding: 4px 8px; /* 紧凑行高 */
+        cursor: pointer;
+        border-radius: 4px;
+        margin: 1px 4px;
         color: #333;
     }
 
-    .confirm-btn {
-        background: rgba(37, 99, 235, 0.9);
-        color: white;
-        border-color: rgba(37, 99, 235, 0.3);
+    :global(.tree-item-content:hover) {
+        background-color: rgba(0,0,0,0.04);
+    }
+    
+    /* 选中的样式 (如果有) */
+    :global(.tree-item-content.selected) {
+        background-color: #e0e7ff;
+        color: #3730a3;
     }
 
-    .confirm-btn:hover:not(:disabled) {
-        background: rgba(37, 99, 235, 1);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    /* --- 上下文菜单 (Native Look) --- */
+    .context-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        border-radius: 6px;
+        padding: 4px;
+        min-width: 140px;
+        z-index: 9999;
     }
 
-    .confirm-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+    .menu-item {
+        padding: 4px 10px;
+        font-size: 13px;
+        border-radius: 4px;
+        cursor: pointer;
+        color: #333;
+        text-align: left;
     }
 
-    /* App.svelte 中的样式 */
-.context-menu {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  min-width: 150px;
-  overflow: hidden;
-  z-index: 9999;
-}
+    .menu-item:hover {
+        background: #3b82f6;
+        color: #fff;
+    }
 
-.menu-list {
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-}
+    .menu-item.delete:hover {
+        background: #ef4444; /* 红色警告 */
+    }
+    
+    .menu-divider {
+        height: 1px;
+        background: rgba(0,0,0,0.1);
+        margin: 4px 0;
+    }
 
-.menu-item {
-  padding: 6px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #333;
-  transition: background-color 0.2s;
-  width: 100%;
-  text-align: left;
-}
+    /* --- 弹窗 (Spotlight 风格) --- */
+    .modal-overlay {
+        position: fixed;
+        top: 0;left: 0;right: 0;bottom: 0;
+        background: rgba(255,255,255,0.5); /* 非常淡的遮罩 */
+        z-index: 2000;
+        display: flex;
+        align-items: flex-start; /* 靠上显示 */
+        justify-content: center;
+        padding-top: 80px;
+    }
 
-.menu-item:hover {
-  background-color: #f5f5f5;
-}
+    .modal-box {
+        background: #fff;
+        width: 380px;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        border: 1px solid rgba(0,0,0,0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
 
-.menu-item:last-child {
-  color: #dc3545;
-}
+    .modal-box.compact {
+        width: 300px;
+        padding: 8px;
+    }
 
-.menu-item:last-child:hover {
-  background-color: #f8d7da;
-  color: #721c24;
-}
+    .input-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .input-group input {
+        border: none;
+        padding: 12px 16px;
+        font-size: 14px;
+        outline: none;
+        width: 100%;
+        background: transparent;
+    }
+
+    .title-input {
+        border-bottom: 1px solid #eee !important;
+        font-weight: 500;
+    }
+
+    .modal-box.compact input {
+        border: 1px solid #eee;
+        border-radius: 4px;
+        padding: 6px 10px;
+        background: #f9f9f9;
+    }
+    .modal-box.compact input:focus {
+        background: #fff;
+        border-color: #3b82f6;
+    }
+
+    .modal-footer {
+        background: #f9fafb;
+        padding: 6px 10px;
+        text-align: right;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .hint {
+        font-size: 11px;
+        color: #999;
+    }
+
 </style>
