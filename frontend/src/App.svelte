@@ -609,7 +609,7 @@
         border-radius: 4px;
         cursor: pointer;
         color: #333;
-        text-align: left;
+        text-align: left;   
     }
 
     .menu-item:hover {
