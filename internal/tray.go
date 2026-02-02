@@ -95,6 +95,7 @@ func (tm *TrayManager) onReady() {
 
 	// 1. 添加菜单项
 	mShow := systray.AddMenuItem("显示主界面", "显示窗口")
+	mHotkey := systray.AddMenuItem("设置", "设置页面")
 	mQuit := systray.AddMenuItem("退出", "退出程序")
 
 	// 2. 【核心修改】使用回调函数，而不是 Channel
@@ -111,6 +112,11 @@ func (tm *TrayManager) onReady() {
 		tm.isQuitting = true
 		systray.Quit()
 		runtime.Quit(tm.ctx)
+	})
+
+	// 热键设置
+	mHotkey.Click(func() {
+		runtime.EventsEmit(tm.ctx, "show-settings")
 	})
 
 	// 如果需要设置托盘左键点击（显示窗口）

@@ -6,7 +6,9 @@ require (
 	github.com/energye/systray v1.0.2
 	github.com/go-vgo/robotgo v1.0.0
 	github.com/json-iterator/go v1.1.12
+	github.com/robotn/gohook v0.42.3
 	github.com/wailsapp/wails/v2 v2.11.0
+	golang.design/x/hotkey v0.4.1
 )
 
 require (

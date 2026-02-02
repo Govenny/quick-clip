@@ -4,15 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"quick-clip/internal"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.design/x/hotkey" // 注意：这个库通常要求在主线程初始化
 )
 
 // App struct
 type App struct {
-	ctx     context.Context
-	content []any
-	keys    string
+	ctx         context.Context
+	content     []any
+	keys        string
+	shortcutMgr *internal.ShortcutManager
 }
 
 // NewApp creates a new App application struct
@@ -46,6 +50,10 @@ func (a *App) startup(ctx context.Context) {
 	// }
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(content, &a.content)
+
+	// 注册全局热键
+	a.registerGlobalHotkey()
+
 }
 
 // shutdown is called when the app is about to close
@@ -79,4 +87,22 @@ func (a *App) saveToFile() {
 	if err != nil {
 		return
 	}
+}
+
+func (a *App) registerGlobalHotkey() {
+	go func() {
+		// 注册 Alt + Space
+		// ModAlt, KeySpace 需要根据库的定义
+		hk := hotkey.New([]hotkey.Modifier{hotkey.ModAlt}, hotkey.KeySpace)
+		err := hk.Register()
+		if err != nil {
+			return
+		}
+
+		// 监听热键事件
+		for range hk.Keydown() {
+			runtime.WindowShow(a.ctx)
+			// runtime.WindowSetFocus(a.ctx)
+		}
+	}()
 }
