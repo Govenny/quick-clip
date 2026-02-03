@@ -18,6 +18,10 @@ export function RestoreFocus(arg1) {
   return window['go']['internal']['Action']['RestoreFocus'](arg1);
 }
 
+export function SendPaste() {
+  return window['go']['internal']['Action']['SendPaste']();
+}
+
 export function SetSelfHwnd(arg1) {
   return window['go']['internal']['Action']['SetSelfHwnd'](arg1);
 }

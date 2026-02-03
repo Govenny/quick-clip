@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"syscall"
+	"time"
 
 	"github.com/tailscale/win"
 )
@@ -163,4 +164,45 @@ func attachThreadInput(idAttach, idAttachTo uint32, fAttach bool) {
 		uintptr(idAttachTo),
 		uintptr(flag),
 	)
+}
+
+const (
+	INPUT_KEYBOARD  = 1
+	KEYEVENTF_KEYUP = 0x0002
+	VK_CONTROL      = 0x11
+	VK_V            = 0x56
+)
+
+// 如果上面的不行，试试这个原生 syscall 版本
+func (a *Action) SendPaste() {
+	// 1. 稍微延时，等待窗口隐藏和焦点彻底回到原位
+	time.Sleep(150 * time.Millisecond)
+
+	user32 := syscall.NewLazyDLL("user32.dll")
+	keybd := user32.NewProc("keybd_event")
+
+	const (
+		VK_CONTROL = 0x11
+		VK_V       = 0x56
+		VK_MENU    = 0x12 // Alt 键
+		KEYUP      = 0x0002
+	)
+
+	// 2. 【关键】强制松开物理 Alt 键
+	// 如果用户按住 Alt+Space 触发，点击时 Alt 可能还没松开
+	// 模拟一次 Alt 的 KeyUp，确保环境“干净”
+	keybd.Call(uintptr(VK_MENU), 0, KEYUP, 0)
+
+	// 3. 开始模拟 Ctrl + V
+	// 按下 Ctrl
+	keybd.Call(uintptr(VK_CONTROL), 0, 0, 0)
+	// 按下 V
+	keybd.Call(uintptr(VK_V), 0, 0, 0)
+
+	// 松开 V
+	keybd.Call(uintptr(VK_V), 0, KEYUP, 0)
+	// 松开 Ctrl
+	keybd.Call(uintptr(VK_CONTROL), 0, KEYUP, 0)
+
+	fmt.Println("粘贴指令已发送")
 }

@@ -10,6 +10,8 @@ export function RecordActiveWindow():Promise<win.HWND>;
 
 export function RestoreFocus(arg1:win.HWND):Promise<void>;
 
+export function SendPaste():Promise<void>;
+
 export function SetSelfHwnd(arg1:win.HWND):Promise<void>;
 
 export function ShowNoActivate():Promise<void>;

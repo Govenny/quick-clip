@@ -6,6 +6,10 @@ export function GetContent() {
   return window['go']['main']['App']['GetContent']();
 }
 
+export function PasteAndHide() {
+  return window['go']['main']['App']['PasteAndHide']();
+}
+
 export function SaveContent(arg1) {
   return window['go']['main']['App']['SaveContent'](arg1);
 }

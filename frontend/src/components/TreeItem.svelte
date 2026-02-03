@@ -1,5 +1,6 @@
 <script>
 	import { slide } from "svelte/transition";
+	import { PasteAndHide } from "../../wailsjs/go/main/App";
 	// import { LogInfo } from "../../wailsjs/runtime/runtime"; // 暂时注释，防报错
 
 	// props
@@ -29,6 +30,7 @@
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		}).catch((err) => console.error("Failed to copy: ", err));
+		PasteAndHide();
 	}
 
 	function handleKeyCopy(e, text) {

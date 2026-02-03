@@ -117,7 +117,7 @@ func (a *App) registerGlobalHotkey() {
 	go func() {
 		// 注册 Alt + Space
 		// ModAlt, KeySpace 需要根据库的定义
-		hk := hotkey.New([]hotkey.Modifier{hotkey.ModAlt}, hotkey.KeySpace)
+		hk := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl}, hotkey.KeyQ)
 		err := hk.Register()
 		if err != nil {
 			return
@@ -132,14 +132,30 @@ func (a *App) registerGlobalHotkey() {
 
 // 你的热键触发逻辑
 func (a *App) toggleWindow() {
-	// 这里不再使用 runtime.WindowShow(a.ctx)
-	// 也不再需要 RecordActiveWindow 和 RestoreFocus 了
-	// 因为我们压根就没有抢走焦点！
 	if a.isVisible {
 		a.isVisible = false
 		a.action.Hide()
 	} else {
+		a.lastHwnd = a.action.RecordActiveWindow()
 		a.isVisible = true
 		a.action.ShowNoActivate()
 	}
+}
+
+func (a *App) PasteAndHide() {
+	// 1. 隐藏窗口（使用我们之前写的原生 Hide）
+	// 此时焦点会自动回到上一个窗口，或者配合 RestoreFocus 强行还回去
+	a.isVisible = false
+	a.action.Hide()
+	a.action.RestoreFocus(a.lastHwnd)
+	time.Sleep(100 * time.Millisecond)
+	// 如果你用了 ShowNoActivate，焦点理论上还在原处
+	// 但为了保险，可以显式还一下焦点（如果你记录了 lastHwnd）
+	// if a.lastHwnd != 0 {
+	//     a.action.RestoreFocus(a.lastHwnd)
+	// }
+
+	// 2. 模拟粘贴
+	// 建议新开一个协程，避免阻塞 Wails 的前端回调
+	go a.action.SendPaste()
 }

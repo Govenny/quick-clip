@@ -3,4 +3,6 @@
 
 export function GetContent():Promise<Array<any>>;
 
+export function PasteAndHide():Promise<void>;
+
 export function SaveContent(arg1:Array<any>):Promise<void>;
