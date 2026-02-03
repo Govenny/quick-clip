@@ -5,24 +5,29 @@ import (
 	"encoding/json"
 	"os"
 	"quick-clip/internal"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/tailscale/win"
 	"golang.design/x/hotkey" // 注意：这个库通常要求在主线程初始化
 )
 
 // App struct
 type App struct {
-	ctx         context.Context
-	content     []any
-	keys        string
-	shortcutMgr *internal.ShortcutManager
+	ctx       context.Context
+	content   []any
+	keys      string
+	action    *internal.Action
+	isVisible bool
+	lastHwnd  win.HWND
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
-		keys: "11112222111122221111222211112222",
+		keys:      "11112222111122221111222211112222",
+		action:    internal.NewAction(),
+		isVisible: false,
 	}
 }
 
@@ -53,6 +58,25 @@ func (a *App) startup(ctx context.Context) {
 
 	// 注册全局热键
 	a.registerGlobalHotkey()
+
+	// 注册窗口句柄
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1000 * time.Millisecond)
+
+			hwnd := a.action.FindRealWailsWindow()
+			if hwnd != 0 {
+				rootHwnd := internal.GetRootHWND(hwnd)
+				a.action.SetSelfHwnd(rootHwnd)
+
+				// 初始化完成后，先用原生方式藏起来
+				// 这样 Wails 认为窗口是“显示”的，WebView2 会继续工作
+				// 但用户看不见
+				a.action.Hide()
+				break
+			}
+		}
+	}()
 
 }
 
@@ -101,8 +125,21 @@ func (a *App) registerGlobalHotkey() {
 
 		// 监听热键事件
 		for range hk.Keydown() {
-			runtime.WindowShow(a.ctx)
-			// runtime.WindowSetFocus(a.ctx)
+			a.toggleWindow()
 		}
 	}()
+}
+
+// 你的热键触发逻辑
+func (a *App) toggleWindow() {
+	// 这里不再使用 runtime.WindowShow(a.ctx)
+	// 也不再需要 RecordActiveWindow 和 RestoreFocus 了
+	// 因为我们压根就没有抢走焦点！
+	if a.isVisible {
+		a.isVisible = false
+		a.action.Hide()
+	} else {
+		a.isVisible = true
+		a.action.ShowNoActivate()
+	}
 }

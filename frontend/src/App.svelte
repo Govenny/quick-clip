@@ -396,19 +396,16 @@
     {#if globalContextMenu.isFolder}
         <div class="menu-item" on:click={addText} on:keyup={(e) => {
                 if (e.key === 'Enter') {
-                    Quit();
                 }
             }}>New Text</div>
         <div class="menu-item" on:click={addDir} on:keyup={(e) => {
                 if (e.key === 'Enter') {
-                    Quit();
                 }
             }}>New Folder</div>
         <div class="menu-divider"></div>
     {/if}
     <div class="menu-item delete" on:click={deleteItem} on:keyup={(e) => {
                 if (e.key === 'Enter') {
-                    Quit();
                 }
             }}>Delete</div>
   </div>

@@ -8,7 +8,6 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -31,8 +30,9 @@ func main() {
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
 			// 如果不是通过托盘点击“退出”的，就只隐藏窗口，不关闭
 			if !trayMgr.IsQuitting() {
-				runtime.WindowHide(ctx) // 隐藏窗口（任务栏图标也会消失）
-				return true             // 返回 true 阻止默认的关闭行为
+				//runtime.WindowHide(ctx) // 隐藏窗口（任务栏图标也会消失）
+				app.action.Hide()
+				return true // 返回 true 阻止默认的关闭行为
 			}
 			return false // 返回 false 允许关闭
 		},
@@ -47,8 +47,12 @@ func main() {
 			app,
 			action,
 		},
-		Frameless: true,
-		// AlwaysOnTop: true,
+		Frameless:   true,
+		AlwaysOnTop: true,
+		// Windows: &windows.Options{
+		// 	// 允许窗口在失去焦点时继续渲染
+		// 	WebviewUserDataFolder: "",
+		// },
 	})
 
 	if err != nil {
