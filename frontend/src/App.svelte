@@ -66,6 +66,10 @@
         if (!e.target.closest('.context-menu')) {
             hideContextMenu();
         }
+
+        if (!e.target.closest('.dropdown-menu') && !e.target.closest('.add-btn') && !e.target.closest('.icon-btn')) {
+            cancelMenu();
+        }
     }
 
     function deleteItem() {
@@ -292,6 +296,10 @@
         cleanGlobalContextMenu();
     }
 
+    function cancelMenu() {
+        showMenu = false;
+    }
+
     // 焦点--------------------------------------------
     let lastFocusTime = 0;
 
@@ -347,7 +355,7 @@
                     </svg>
                 </button>
                 {#if showMenu}
-                    <div class="dropdown-menu" transition:fade={{duration: 100}}>
+                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation transition:fade={{duration: 100}}>
                         <button on:click={addText}>文本 (Text)</button>
                         <button on:click={addDir}>文件夹 (Folder)</button>
                     </div>
@@ -530,7 +538,7 @@
         border-radius: 6px;
         padding: 4px;
         min-width: 120px;
-        z-index: 100;
+        z-index: 9999;
     }
 
     .dropdown-menu button {
@@ -654,6 +662,7 @@
         align-items: flex-start; /* 靠上显示 */
         justify-content: center;
         padding-top: 80px;
+        z-index: 9998;
     }
 
     .modal-box {
