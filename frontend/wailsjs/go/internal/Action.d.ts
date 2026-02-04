@@ -14,4 +14,6 @@ export function SendPaste():Promise<void>;
 
 export function SetSelfHwnd(arg1:win.HWND):Promise<void>;
 
+export function SetSizeNative(arg1:number,arg2:number):Promise<void>;
+
 export function ShowNoActivate():Promise<void>;

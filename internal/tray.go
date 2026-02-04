@@ -14,10 +14,14 @@ var iconData []byte
 type TrayManager struct {
 	ctx        context.Context
 	isQuitting bool
+	action     *Action
 }
 
-func NewTrayManager() *TrayManager {
-	return &TrayManager{isQuitting: false}
+func NewTrayManager(action *Action) *TrayManager {
+	return &TrayManager{
+		isQuitting: false,
+		action:     action,
+	}
 }
 
 // 这个方法将在 Wails 启动时被调用
@@ -102,9 +106,10 @@ func (tm *TrayManager) onReady() {
 	// energye/systray 的特点：使用 Click 方法传入一个函数
 	mShow.Click(func() {
 		// 显示窗口
-		runtime.WindowShow(tm.ctx)
-		runtime.WindowSetAlwaysOnTop(tm.ctx, true)
-		runtime.WindowSetAlwaysOnTop(tm.ctx, false)
+		// runtime.WindowShow(tm.ctx)
+		// runtime.WindowSetAlwaysOnTop(tm.ctx, true)
+		// runtime.WindowSetAlwaysOnTop(tm.ctx, false)
+		tm.action.ShowNoActivate()
 	})
 
 	mQuit.Click(func() {
@@ -121,9 +126,10 @@ func (tm *TrayManager) onReady() {
 
 	// 如果需要设置托盘左键点击（显示窗口）
 	systray.SetOnClick(func(menu systray.IMenu) {
-		runtime.WindowShow(tm.ctx)
-		runtime.WindowSetAlwaysOnTop(tm.ctx, true)
-		runtime.WindowSetAlwaysOnTop(tm.ctx, false)
+		// runtime.WindowShow(tm.ctx)
+		// runtime.WindowSetAlwaysOnTop(tm.ctx, true)
+		// runtime.WindowSetAlwaysOnTop(tm.ctx, false)
+		tm.action.ShowNoActivate()
 	})
 
 	// 托盘右键点击（显示菜单）
@@ -132,7 +138,8 @@ func (tm *TrayManager) onReady() {
 	})
 
 	systray.SetOnDClick(func(menu systray.IMenu) {
-		runtime.WindowShow(tm.ctx)
+		// runtime.WindowShow(tm.ctx)
+		tm.action.ShowNoActivate()
 	})
 }
 

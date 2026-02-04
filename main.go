@@ -14,9 +14,9 @@ import (
 var assets embed.FS
 
 func main() {
-	trayMgr := internal.NewTrayManager()
-	app := NewApp()
 	action := internal.NewAction()
+	trayMgr := internal.NewTrayManager(action)
+	app := NewApp(action)
 
 	// Create application with options
 	err := wails.Run(&options.App{

@@ -23,10 +23,10 @@ type App struct {
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
+func NewApp(action *internal.Action) *App {
 	return &App{
 		keys:      "11112222111122221111222211112222",
-		action:    internal.NewAction(),
+		action:    action,
 		isVisible: false,
 	}
 }
@@ -117,7 +117,7 @@ func (a *App) registerGlobalHotkey() {
 	go func() {
 		// 注册 Alt + Space
 		// ModAlt, KeySpace 需要根据库的定义
-		hk := hotkey.New([]hotkey.Modifier{hotkey.ModCtrl}, hotkey.KeyQ)
+		hk := hotkey.New([]hotkey.Modifier{hotkey.ModAlt}, hotkey.KeyQ)
 		err := hk.Register()
 		if err != nil {
 			return
@@ -125,13 +125,13 @@ func (a *App) registerGlobalHotkey() {
 
 		// 监听热键事件
 		for range hk.Keydown() {
-			a.toggleWindow()
+			a.ToggleWindow()
 		}
 	}()
 }
 
 // 你的热键触发逻辑
-func (a *App) toggleWindow() {
+func (a *App) ToggleWindow() {
 	if a.isVisible {
 		a.isVisible = false
 		a.action.Hide()
@@ -142,20 +142,30 @@ func (a *App) toggleWindow() {
 	}
 }
 
-func (a *App) PasteAndHide() {
-	// 1. 隐藏窗口（使用我们之前写的原生 Hide）
-	// 此时焦点会自动回到上一个窗口，或者配合 RestoreFocus 强行还回去
+func (a *App) HideWindow() {
 	a.isVisible = false
 	a.action.Hide()
-	a.action.RestoreFocus(a.lastHwnd)
-	time.Sleep(100 * time.Millisecond)
-	// 如果你用了 ShowNoActivate，焦点理论上还在原处
-	// 但为了保险，可以显式还一下焦点（如果你记录了 lastHwnd）
-	// if a.lastHwnd != 0 {
-	//     a.action.RestoreFocus(a.lastHwnd)
-	// }
+}
 
-	// 2. 模拟粘贴
-	// 建议新开一个协程，避免阻塞 Wails 的前端回调
+func (a *App) PasteAndHide() {
+	// 1. 隐藏窗口
+	a.isVisible = false
+	a.action.Hide()
+
+	// 2. 恢复焦点
+	a.action.RestoreFocus(a.lastHwnd)
+
+	// 3. 等待并粘贴
+	time.Sleep(100 * time.Millisecond)
 	go a.action.SendPaste()
+}
+
+// 进入设置模式：变大
+func (a *App) EnterSettingsMode() {
+	a.action.SetSizeNative(600, 450)
+}
+
+// 退出设置模式：变回紧凑小窗口
+func (a *App) ExitSettingsMode() {
+	a.action.SetSizeNative(320, 480)
 }

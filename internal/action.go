@@ -91,18 +91,22 @@ func (a *Action) ShowNoActivate() {
 
 	// 1. 确保样式包含 NOACTIVATE 和 TOOLWINDOW
 	exStyle := win.GetWindowLong(a.selfHwnd, GWL_EXSTYLE)
-	win.SetWindowLong(a.selfHwnd, GWL_EXSTYLE, exStyle|WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW)
+	win.SetWindowLong(a.selfHwnd, GWL_EXSTYLE, exStyle|WS_EX_TOOLWINDOW)
+
+	win.ShowWindow(a.selfHwnd, win.SW_SHOW)
 
 	// 2. 使用 SetWindowPos 显示
 	win.SetWindowPos(
 		a.selfHwnd,
 		HWND_TOPMOST,
 		0, 0, 0, 0,
-		SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW,
+		SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW,
 	)
+	win.SetForegroundWindow(a.selfHwnd)
+	win.SetFocus(a.selfHwnd)
 
 	// 3. 补偿显示
-	win.ShowWindow(a.selfHwnd, 4) // SW_SHOWNOACTIVATE
+	// win.ShowWindow(a.selfHwnd, 4) // SW_SHOWNOACTIVATE
 }
 
 // Hide 封装隐藏
@@ -205,4 +209,23 @@ func (a *Action) SendPaste() {
 	keybd.Call(uintptr(VK_CONTROL), 0, KEYUP, 0)
 
 	fmt.Println("粘贴指令已发送")
+}
+
+func (a *Action) SetSizeNative(width, height int) {
+	if a.selfHwnd == 0 {
+		return
+	}
+
+	// 使用 SetWindowPos 进行缩放
+	// SWP_NOMOVE: 保持当前位置
+	// SWP_NOZORDER: 保持当前的层级（不改变置顶状态）
+	// SWP_NOACTIVATE: 关键！缩放时不激活窗口，光标不丢失
+	win.SetWindowPos(
+		a.selfHwnd,
+		0,    // 忽略，因为用了 SWP_NOZORDER
+		0, 0, // 忽略，因为用了 SWP_NOMOVE
+		int32(width),
+		int32(height),
+		win.SWP_NOMOVE|win.SWP_NOZORDER,
+	)
 }

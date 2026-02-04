@@ -1,14 +1,16 @@
 <script>
     import { onMount, tick, onDestroy } from 'svelte';
     import { fade, fly} from 'svelte/transition';
-    import { GetContent, SaveContent } from '../wailsjs/go/main/App'; 
-    import { LogInfo, Quit    } from '../wailsjs/runtime';
+    import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow} from '../wailsjs/go/main/App'; 
+    import { LogInfo, Quit, EventsOn   } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
+    import Setting from './components/Setting.svelte';
 
     let data = [];
     let expanded = {};
     let showMenu = false;
     let isHovered = false;
+    let showSettings = false;
 
     // 添加目录
     let showDirInput = false;
@@ -114,6 +116,15 @@
     onMount(() => {
         document.addEventListener('click', handleGlobalClick);
         document.addEventListener('contextmenu', hideContextMenu); // 右键其他地方也关闭
+
+        // 监听来自后端的 show-settings 事件
+        const settingsEventListener = async (data) => {
+            showSettings = true;
+            EnterSettingsMode();
+            ToggleWindow();
+        };
+        EventsOn("show-settings", settingsEventListener);
+        
     });
 
     onMount(async () => {
@@ -307,14 +318,31 @@
         lastFocusTime = Date.now();
     }
 
+    // function handleBlur() {
+    //     const now = Date.now();
+    //     if (now - lastFocusTime < 200) {
+    //         return;
+    //     }else{
+    //         ToggleWindow();
+    //     }
+    // }
     function handleBlur() {
-        const now = Date.now();
-        if (now - lastFocusTime < 200) {
-            return;
-        }else{
-            Quit();
-        }
-    }
+        // 强制等待一帧，让 document.activeElement 更新
+        requestAnimationFrame(() => {
+            // 如果窗口依然拥有焦点，或者焦点移到了窗口内的某个元素
+            if (document.hasFocus()) {
+                return;
+            }
+
+            // 如果弹窗（Modal）正在显示，用户可能在操作弹窗，特殊处理
+            if (showTextInput || showDirInput || showSettings) {
+                // 这里可以根据需求决定：弹窗开启时，点外部是否隐藏全应用
+                return; 
+            }
+
+            HideWindow();
+        });
+}
     // ----------------------------------------------
 
     function updateData(newData) {
@@ -434,6 +462,17 @@
             </div>
         </div>
     </div>
+{/if}
+
+{#if showSettings}
+    <Setting 
+        on:close={
+        () => {
+            showSettings = false;
+            ExitSettingsMode();
+        }
+    } 
+    />
 {/if}
 
 <style>

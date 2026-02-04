@@ -26,6 +26,10 @@ export function SetSelfHwnd(arg1) {
   return window['go']['internal']['Action']['SetSelfHwnd'](arg1);
 }
 
+export function SetSizeNative(arg1, arg2) {
+  return window['go']['internal']['Action']['SetSizeNative'](arg1, arg2);
+}
+
 export function ShowNoActivate() {
   return window['go']['internal']['Action']['ShowNoActivate']();
 }
