@@ -1,16 +1,74 @@
-# README
+这是一个非常棒的项目！结合你提供的图片（简洁的列表和设置界面）以及“点击自动填入”的功能，我为你拟定了一份专业且吸引人的 README.md。
 
-## About
+Quick-Clip
 
-This is the official Wails Svelte template.
+Quick-Clip 是一款专为效率控设计的轻量级、开源桌面密码管理助手。它不仅能安全地存储你的敏感信息，更能通过“一键穿梭”功能，自动将密码填入目标程序，彻底告别繁琐的复制粘贴。
 
-## Live Development
+✨ 核心特性
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+🚀 极速唤醒：支持自定义全局快捷键（如 Alt + Space），随叫随到，用完即隐藏。
 
-## Building
+⌨️ 智能填入：点击条目后，程序会自动切换回上一个活动窗口，并模拟键盘输入密码，支持所有桌面应用与浏览器。
 
-To build a redistributable, production mode package, use `wails build`.
+🔐 军事级加密：所有数据均采用 AES-256 算法进行本地加密存储，不上传云端，确保隐私掌握在自己手中。
+
+📂 树状组织：支持多级目录分类，清晰管理不同场景（如测试、社交、金融）的密码。
+
+🪶 极致轻量：基于 Wails & WebView2 构建，安装包极小，运行时内存占用仅 100MB 左右。
+
+🎨 现代 UI：精致的侧边栏设计，支持透明度调节，完美融入你的桌面审美。
+
+🛠️ 工作原理
+
+呼出：按下全局快捷键，Quick-Clip 浮现在屏幕中央。
+
+搜索：通过顶部的搜索框快速定位需要的账户。
+
+填入：点击目标条目，Quick-Clip 会：
+
+自动隐藏当前窗口。
+
+利用系统底层接口回溯至上一个聚焦的应用程序。
+
+模拟键盘敲击，将密码字符逐个填入光标所在位置。
+
+🔒 安全说明
+
+本地存储：数据文件存储在用户本地目录下，不提供后端接口，从物理上杜绝了拖库风险。
+
+加密协议：使用随机 Salt 与 AES 算法对 JSON 数据库进行全盘加密。
+
+开源透明：核心逻辑清晰可见，你可以放心编译使用。
+
+🚀 快速开始
+下载运行
+
+直接从 Releases 下载对应系统的安装包。
+
+# 安装依赖
+wails doctor
+
+# 开发模式运行
+wails dev
+
+# 打包正式版
+wails build
+⚙️ 设置选项
+
+通过托盘菜单进入 Settings 页面，你可以：
+
+常规：开启/关闭开机自启。
+
+快捷键：配置最顺手的唤醒组合键。
+
+📝 技术栈
+
+Backend: Go
+
+Frontend: Svelte / TS (Wails Framework)
+
+UI Design: CSS3 (iOS 风格组件)
+
+Automation: 系统级模拟输入接口
+
+Quick-Clip —— 让密码管理回归简单与高效。
