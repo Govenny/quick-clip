@@ -13,7 +13,7 @@ export namespace internal {
 	    }
 	}
 	export class ShortcutsConfig {
-	    wakeUp: string;
+	    wakeUp: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ShortcutsConfig(source);

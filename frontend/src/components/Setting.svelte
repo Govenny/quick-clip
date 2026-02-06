@@ -1,18 +1,33 @@
 <script>
 import { createEventDispatcher, onMount } from 'svelte';
     import { fade, fly } from 'svelte/transition';
-    import { GetConfig, UpdateConfig } from "../../wailsjs/go/main/App"
+    import { GetConfig, UpdateConfig, RegisterGlobalHotkey } from "../../wailsjs/go/main/App"
     import { ToggleAutoStart, IsAutoStartCheck } from "../../wailsjs/go/internal/AppService"
     import { LogInfo } from '../../wailsjs/runtime/runtime';
     import { internal } from "../../wailsjs/go/models"
 
     let config = null; // 初始设为 null
+    const modifiers = ["Alt", "Ctrl", "Shift", "Win"];
+    const keys = ["Space", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Return", "Escape", "Delete", "Tab", "Left", "Right", "Up", "Down", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
+    let selectedMod = "";
+    let selectedKey = "";
+
+    // 3. 在数据加载完成后，解析 config.shortcuts.wakeUp
+    // 比如把 "Alt+Space" 拆分成 "Alt" 和 "Space"
+    $: if (config && config.shortcuts.wakeUp && !selectedMod) {
+        selectedMod = config.shortcuts.wakeUp[0];
+        selectedKey = config.shortcuts.wakeUp[1];
+    }
+
+    function updateHotkey() {
+        config.shortcuts.wakeUp = [selectedMod,selectedKey];
+        LogInfo("新快捷键:" + config.shortcuts.wakeUp);
+        RegisterGlobalHotkey(config.shortcuts.wakeUp[0], config.shortcuts.wakeUp[1]);
+    }
 
     onMount(async () => {
         try {
             const rawConfig = await GetConfig();
-            // 调试用：看看后端到底传过来了什么
-            console.log("Raw config from Go:", rawConfig); 
             config = internal.Config.createFrom(rawConfig);
         } catch (error) {
             console.error('Failed to load config:', error);
@@ -23,6 +38,7 @@ import { createEventDispatcher, onMount } from 'svelte';
             const isAutoStart = await IsAutoStartCheck();
             if (isAutoStart != config.general.launchAtLogin) {
                 config.general.launchAtLogin = isAutoStart;
+                save();
             }
         } catch (err) {
             console.error("读取自启状态失败:", err);
@@ -51,11 +67,6 @@ import { createEventDispatcher, onMount } from 'svelte';
         close();
     }
 
-    // 简单的键盘录制逻辑 (模拟)
-    function recordShortcut(key) {
-        alert(`正在监听 ${key} 的新按键... (逻辑需对接 gohook)`);
-    }
-
     async function syncAutoStart(enabled) {
         try {
             await ToggleAutoStart(enabled);
@@ -66,6 +77,7 @@ import { createEventDispatcher, onMount } from 'svelte';
             // config.general.launchAtLogin = !enabled;
         }
     }
+
 </script>
 
 <!-- 遮罩层：点击空白处关闭 -->
@@ -123,10 +135,26 @@ import { createEventDispatcher, onMount } from 'svelte';
                             <div class="setting-row">
                                 <div class="setting-info">
                                     <label>唤醒快捷键</label>
+                                    <span class="desc">组合键唤醒主窗口</span>
                                 </div>
-                                <button class="shortcut-btn" on:click={() => recordShortcut('wakeUp')}>
-                                    {config.shortcuts.wakeUp}
-                                </button>
+                                
+                                <div class="hotkey-picker">
+                                    <!-- 修饰键下拉框 -->
+                                    <select class="styled-select" bind:value={selectedMod} on:change={updateHotkey}>
+                                        {#each modifiers as mod}
+                                            <option value={mod}>{mod}</option>
+                                        {/each}
+                                    </select>
+
+                                    <span class="plus-sign">+</span>
+
+                                    <!-- 主键下拉框 -->
+                                    <select class="styled-select" bind:value={selectedKey} on:change={updateHotkey}>
+                                        {#each keys as k}
+                                            <option value={k}>{k}</option>
+                                        {/each}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     {/if}
@@ -158,8 +186,8 @@ import { createEventDispatcher, onMount } from 'svelte';
 
                 <!-- 底部按钮 -->
                 <div class="content-footer">
-                    <button class="btn-cancel" on:click={close}>取消</button>
-                    <button class="btn-save" on:click={save}>保存修改</button>
+                    <button class="btn-cancel" on:click={close}>返回</button>
+                    <!-- <button class="btn-save" on:click={save}>保存修改</button> -->
                 </div>
             </div>
         </div>
@@ -272,21 +300,6 @@ import { createEventDispatcher, onMount } from 'svelte';
     .setting-info label { font-weight: 500; color: #333; margin-bottom: 2px; }
     .setting-info .desc { color: #999; font-size: 12px; }
 
-    /* 快捷键按钮模拟 */
-    .shortcut-btn {
-        background: #f9f9f9;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 4px 10px;
-        font-family: monospace;
-        font-size: 12px;
-        color: #555;
-        cursor: pointer;
-        min-width: 80px;
-    }
-    .shortcut-btn:hover { border-color: #999; background: #fff; }
-
-    /* 底部按钮 */
     .content-footer {
         padding: 10px 20px;
         border-top: 1px solid #f0f0f0;
@@ -324,4 +337,29 @@ import { createEventDispatcher, onMount } from 'svelte';
     .about-section { text-align: center; margin-top: 40px; }
     .about-section h3 { margin: 0 0 10px 0; }
     .about-section .desc { color: #888; }
+    .hotkey-picker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .styled-select {
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 13px;
+        color: #333;
+        outline: none;
+        cursor: pointer;
+    }
+
+    .styled-select:hover {
+        border-color: #3b82f6;
+    }
+
+    .plus-sign {
+        font-weight: bold;
+        color: #888;
+    }
 </style>

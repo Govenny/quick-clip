@@ -26,6 +26,10 @@ export function PasteAndHide() {
   return window['go']['main']['App']['PasteAndHide']();
 }
 
+export function RegisterGlobalHotkey(arg1, arg2) {
+  return window['go']['main']['App']['RegisterGlobalHotkey'](arg1, arg2);
+}
+
 export function SaveContent(arg1) {
   return window['go']['main']['App']['SaveContent'](arg1);
 }

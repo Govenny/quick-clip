@@ -14,6 +14,8 @@ export function HideWindow():Promise<void>;
 
 export function PasteAndHide():Promise<void>;
 
+export function RegisterGlobalHotkey(arg1:string,arg2:string):Promise<void>;
+
 export function SaveContent(arg1:Array<any>):Promise<void>;
 
 export function ToggleWindow():Promise<void>;
