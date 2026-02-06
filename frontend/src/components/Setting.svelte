@@ -312,8 +312,6 @@ import { createEventDispatcher, onMount } from 'svelte';
     button { font-size: 13px; padding: 6px 14px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
     .btn-cancel { background: transparent; color: #666; }
     .btn-cancel:hover { color: #333; background: #e0e0e0; }
-    .btn-save { background: #3b82f6; color: white; }
-    .btn-save:hover { background: #2563eb; }
 
     /* iOS 风格 Toggle Switch */
     .toggle-switch { position: relative; width: 36px; height: 20px; display: inline-block; }
@@ -337,29 +335,52 @@ import { createEventDispatcher, onMount } from 'svelte';
     .about-section { text-align: center; margin-top: 40px; }
     .about-section h3 { margin: 0 0 10px 0; }
     .about-section .desc { color: #888; }
-    .hotkey-picker {
+.hotkey-picker {
         display: flex;
         align-items: center;
-        gap: 8px;
+        background: #f1f1f4; /* 浅灰色底座 */
+        padding: 4px;
+        border-radius: 8px;
+        gap: 4px;
+        border: 1px solid rgba(0,0,0,0.05);
     }
 
     .styled-select {
-        background: #f0f0f0;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 4px 8px;
-        font-size: 13px;
+        appearance: none; /* 隐藏原生箭头 */
+        background: #ffffff;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 6px;
+        padding: 5px 12px;
+        font-size: 12px;
+        font-weight: 500;
         color: #333;
         outline: none;
         cursor: pointer;
+        min-width: 80px;
+        text-align: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* 悬停效果 */
     .styled-select:hover {
+        background: #fafafa;
+        border-color: rgba(0,0,0,0.2);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+    }
+
+    /* 聚焦状态 */
+    .styled-select:focus {
         border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
     }
 
     .plus-sign {
-        font-weight: bold;
-        color: #888;
+        font-size: 14px;
+        font-weight: 600;
+        color: #a1a1aa;
+        padding: 0 4px;
+        user-select: none;
     }
 </style>
