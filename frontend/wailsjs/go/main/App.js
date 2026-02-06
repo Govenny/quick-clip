@@ -10,6 +10,10 @@ export function ExitSettingsMode() {
   return window['go']['main']['App']['ExitSettingsMode']();
 }
 
+export function GetConfig() {
+  return window['go']['main']['App']['GetConfig']();
+}
+
 export function GetContent() {
   return window['go']['main']['App']['GetContent']();
 }
@@ -28,4 +32,8 @@ export function SaveContent(arg1) {
 
 export function ToggleWindow() {
   return window['go']['main']['App']['ToggleWindow']();
+}
+
+export function UpdateConfig(arg1) {
+  return window['go']['main']['App']['UpdateConfig'](arg1);
 }

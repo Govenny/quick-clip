@@ -162,8 +162,8 @@
         });
     }
 
-    // 表单验证
-    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "";
+    // 表单验证: titleName不包含. textName不包含.
+    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "" && !titleName.includes(".");
 
     // 键盘事件处理函数
     function handleKeyDown(event, isTitleInput) {
@@ -197,6 +197,9 @@
             } else if (!textName) {
                 textInputRef?.focus();
                 alert("请输入值");
+            } else if (titleName.includes(".")) {
+                titleInputRef?.focus();
+                alert("名称不能包含.");
             }
             return;
         }
@@ -267,7 +270,12 @@
 
     function confirmAddDir() {
         const dirNameTrim = dirName.trim();
-        if (dirName.trim() !== "") {
+        if (dirNameTrim.includes(".")) {
+            dirInputRef?.focus();
+            alert("名称不能包含.");
+            return;
+        }
+        if (dirNameTrim !== "") {
             if (globalContextMenu.isFolder) {
                 const folderKey = globalContextMenu.targetKey; // 例如 "0.士大夫大师傅.0.士大夫"
                 const pathParts = folderKey.split('.'); // ["0", "士大夫大师傅", "0", "士大夫"]

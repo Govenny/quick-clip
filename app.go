@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"quick-clip/internal"
 	"time"
 
@@ -14,20 +15,37 @@ import (
 
 // App struct
 type App struct {
-	ctx       context.Context
-	content   []any
-	keys      string
-	action    *internal.Action
-	isVisible bool
-	lastHwnd  win.HWND
+	ctx           context.Context
+	content       []any
+	keys          string
+	action        *internal.Action
+	isVisible     bool
+	lastHwnd      win.HWND
+	configManager *internal.ConfigManager
+	config        *internal.Config
+	dataPath      string
 }
 
 // NewApp creates a new App application struct
 func NewApp(action *internal.Action) *App {
+	configManager := internal.NewConfigManager()
+	config, err := configManager.Load()
+	if err != nil {
+		return nil
+	}
+
+	configDir, _ := os.UserConfigDir()
+	appConfigDir := filepath.Join(configDir, "quick-clip", "data") // 替换为你的应用名
+	os.MkdirAll(appConfigDir, 0755)
+	dataPath := filepath.Join(appConfigDir, "resource.json")
+
 	return &App{
-		keys:      "11112222111122221111222211112222",
-		action:    action,
-		isVisible: false,
+		keys:          "11112222111122221111222211112222",
+		action:        action,
+		isVisible:     false,
+		configManager: configManager,
+		config:        config,
+		dataPath:      dataPath,
 	}
 }
 
@@ -35,11 +53,11 @@ func NewApp(action *internal.Action) *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	content, err := os.ReadFile("./resource.json")
+	content, err := os.ReadFile(a.dataPath)
 	if os.IsNotExist(err) {
 		// 文件不存在，创建文件并写入初始数据
 		initialData := []byte("[]") // 空的JSON数组
-		err = os.WriteFile("./resource.json", initialData, 0644)
+		err = os.WriteFile(a.dataPath, initialData, 0644)
 		if err != nil {
 			return
 		}
@@ -107,7 +125,7 @@ func (a *App) saveToFile() {
 	// 	return
 	// }
 
-	err = os.WriteFile("./resource.json", byteData, 0644)
+	err = os.WriteFile(a.dataPath, byteData, 0644)
 	if err != nil {
 		return
 	}
@@ -168,4 +186,20 @@ func (a *App) EnterSettingsMode() {
 // 退出设置模式：变回紧凑小窗口
 func (a *App) ExitSettingsMode() {
 	a.action.SetSizeNative(320, 480)
+}
+
+// GetConfig 供前端获取当前配置
+func (a *App) GetConfig() *internal.Config {
+	return a.config
+}
+
+// UpdateConfig 供前端更新配置
+func (a *App) UpdateConfig(newCfg *internal.Config) string {
+	a.config = newCfg
+	err := a.configManager.Save(newCfg)
+	if err != nil {
+		return err.Error()
+	}
+	// 这里可以触发一些逻辑更新，比如修改了热键后重新注册热键
+	return "success"
 }

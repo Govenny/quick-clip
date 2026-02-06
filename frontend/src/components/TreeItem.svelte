@@ -1,6 +1,8 @@
 <script>
 	import { slide } from "svelte/transition";
 	import { PasteAndHide } from "../../wailsjs/go/main/App";
+	import catalogExpandImage from '/src/assets/images/catalog-expand.png';
+	import catalogImage from '/src/assets/images/catalog.png';
 	// import { LogInfo } from "../../wailsjs/runtime/runtime"; // 暂时注释，防报错
 
 	// props
@@ -126,55 +128,50 @@
 	function moveItem(srcKey, destParentPath, destIdx) {
 		let newData = JSON.parse(JSON.stringify(data));
 
-		// 1. 移除源
-		let movedItem = null;
+		// 1. 先解析源和目标的“父级引用”
 		const srcParts = srcKey.split(".");
 		const srcIdx = parseInt(srcParts.pop());
 		const srcParentPath = srcParts.join(".");
 
-		let srcParent = getByPath(newData, srcParentPath);
-		// 兼容处理：如果路径指向的是对象 key:value 结构
-		if (srcParent && !Array.isArray(srcParent) && typeof srcParent === 'object') {
-             // 这一步根据你的数据结构可能不需要，但为了保险
-             const k = srcParentPath.split(".").pop();
-             if (srcParent[k]) srcParent = srcParent[k];
-        }
+		const srcParent = getByPath(newData, srcParentPath);
+		// 关键：在删除源之前，先拿到目标容器的引用
+		const destParentRaw = getByPath(newData, destParentPath);
 
-		if (Array.isArray(srcParent)) {
-			[movedItem] = srcParent.splice(srcIdx, 1);
-		} else {
-            console.error("Source parent not array", srcParentPath, srcParent);
-            return;
-        }
+		if (!Array.isArray(srcParent) || !destParentRaw) return;
 
-		// 2. 插入目标
-		let destParent = getByPath(newData, destParentPath);
-		
-		// 特殊处理：如果路径指向的是文件夹对象 { "Folder": [] }
-		if (destParent && !Array.isArray(destParent)) {
-			// 尝试获取最后一段 key，看看是不是在这个对象里
-			const folderKey = destParentPath.split(".").pop();
-			if (destParent[folderKey] && Array.isArray(destParent[folderKey])) {
-				destParent = destParent[folderKey];
+		// 2. 兼容处理：确定目标容器数组
+		let destArray = destParentRaw;
+		if (!Array.isArray(destParentRaw)) {
+			// 如果指向的是 { "Folder": [] } 对象，取其内部数组
+			const lastKey = destParentPath.split(".").pop();
+			if (Array.isArray(destParentRaw[lastKey])) {
+				destArray = destParentRaw[lastKey];
 			} else {
-                // 如果 split 不对，可能是 drop 传入的路径已经是准确的父级对象
-                // 这种情况下通常 destParent 本身应该是包含数组的父级
-                // 你的数据结构似乎是 [ {key: val}, {key: []} ]
-                // 这里需要根据 getByPath 的返回值做防御
-            }
+				// 尝试查找对象中唯一的数组值
+				const foundArray = Object.values(destParentRaw).find(v => Array.isArray(v));
+				if (foundArray) destArray = foundArray;
+			}
 		}
 
-		if (Array.isArray(destParent)) {
-			if (destIdx === -1) destParent.push(movedItem);
-			else destParent.splice(destIdx, 0, movedItem);
-			// [关键修改] 使用 setTimeout 将数据更新推迟到下一个事件循环
-			// 这样可以让浏览器的 dragend 事件先执行完毕，重置样式
-			setTimeout(() => {
-				updateData(newData);
-			}, 0);
+		// 3. 执行移动：先取出，再删除
+		const [movedItem] = srcParent.splice(srcIdx, 1);
+
+		// 4. 处理同级移动的索引修正
+		let finalIdx = destIdx;
+		if (srcParent === destArray && destIdx > srcIdx) {
+			finalIdx--; 
+		}
+
+		// 5. 插入
+		if (finalIdx === -1) {
+			destArray.push(movedItem);
 		} else {
-            console.error("Dest parent not array", destParentPath, destParent);
-        }
+			destArray.splice(finalIdx, 0, movedItem);
+		}
+
+		setTimeout(() => {
+			updateData(newData);
+		}, 0);
 	}
 
 	function getByPath(obj, path) {
@@ -233,7 +230,7 @@
 				<span class="icon">
 					<img
 						class="catalog-icon"
-						src={expanded[itemKey + "." + key] ? "/src/assets/images/catalog-expand.png" : "/src/assets/images/catalog.png"}
+						src={expanded[itemKey + "." + key] ? catalogExpandImage : catalogImage}
 						alt={expanded[itemKey + "." + key] ? "收起" : "展开"}
 					/>
 				</span>

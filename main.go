@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"embed"
+	"os"
+	"path/filepath"
 	"quick-clip/internal"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -17,6 +20,9 @@ func main() {
 	action := internal.NewAction()
 	trayMgr := internal.NewTrayManager(action)
 	app := NewApp(action)
+
+	configDir, _ := os.UserConfigDir()
+	appRoot := filepath.Join(configDir, "quick-clip")
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -49,10 +55,11 @@ func main() {
 		},
 		Frameless:   true,
 		AlwaysOnTop: true,
-		// Windows: &windows.Options{
-		// 	// 允许窗口在失去焦点时继续渲染
-		// 	WebviewUserDataFolder: "",
-		// },
+		Windows: &windows.Options{
+			// 允许窗口在失去焦点时继续渲染
+			WebviewGpuIsDisabled: false,
+			WebviewUserDataPath:  filepath.Join(appRoot, "cache"),
+		},
 	})
 
 	if err != nil {
