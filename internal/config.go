@@ -6,14 +6,25 @@ import (
 	"path/filepath"
 )
 
-// Config 定义你的配置项
-type Config struct {
-	Hotkey     string `json:"hotkey"`
-	Theme      string `json:"theme"`
-	AutoStart  bool   `json:"autoStart"`
-	PasteDelay int    `json:"pasteDelay"`
+type GeneralConfig struct {
+	LaunchAtLogin bool `json:"launchAtLogin"`
 }
 
+type ShortcutsConfig struct {
+	WakeUp [2]string `json:"wakeUp"`
+}
+
+type AppearanceConfig struct {
+	Opacity float64 `json:"opacity"`
+}
+
+type Config struct {
+	General    GeneralConfig    `json:"general"`
+	Shortcuts  ShortcutsConfig  `json:"shortcuts"`
+	Appearance AppearanceConfig `json:"appearance"`
+}
+
+// Config 定义你的配置项
 type ConfigManager struct {
 	Path string
 }
@@ -21,13 +32,13 @@ type ConfigManager struct {
 func NewConfigManager() *ConfigManager {
 	// 获取系统用户配置目录
 	configDir, _ := os.UserConfigDir()
-	appConfigDir := filepath.Join(configDir, "quick-clip") // 替换为你的应用名
+	appConfigDir := filepath.Join(configDir, "quick-clip", "config") // 替换为你的应用名
 
 	// 确保文件夹存在
 	os.MkdirAll(appConfigDir, 0755)
 
 	return &ConfigManager{
-		Path: filepath.Join(appConfigDir, "config", "config.json"),
+		Path: filepath.Join(appConfigDir, "config.json"),
 	}
 }
 
@@ -37,10 +48,15 @@ func (m *ConfigManager) Load() (*Config, error) {
 	if err != nil {
 		// 如果文件不存在，返回默认配置
 		return &Config{
-			Hotkey:     "Alt+Space",
-			Theme:      "dark",
-			AutoStart:  false,
-			PasteDelay: 150,
+			GeneralConfig{
+				LaunchAtLogin: false,
+			},
+			ShortcutsConfig{
+				WakeUp: [2]string{"Alt", "Space"},
+			},
+			AppearanceConfig{
+				Opacity: 0.95,
+			},
 		}, nil
 	}
 

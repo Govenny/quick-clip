@@ -1,28 +1,36 @@
 <script>
-    import { createEventDispatcher, onMount } from 'svelte';
+import { createEventDispatcher, onMount } from 'svelte';
     import { fade, fly } from 'svelte/transition';
+    import { GetConfig, UpdateConfig } from "../../wailsjs/go/main/App"
+    import { ToggleAutoStart, IsAutoStartCheck } from "../../wailsjs/go/internal/AppService"
+    import { LogInfo } from '../../wailsjs/runtime/runtime';
+    import { internal } from "../../wailsjs/go/models"
 
-    // 模拟从后端获取的配置
-    // 实际项目中，你应该在 onMount 里调用 Wails 的 GetConfig()
-    export let config = {
-        general: {
-            launchAtLogin: true,
-            maxHistory: 100,
-            autoClearDays: 7,
-        },
-        shortcuts: {
-            wakeUp: "Alt + Space",
-            quickPaste: "Ctrl + Shift + V"
-        },
-        appearance: {
-            theme: "system", // light, dark, system
-            opacity: 0.95
+    let config = null; // 初始设为 null
+
+    onMount(async () => {
+        try {
+            const rawConfig = await GetConfig();
+            // 调试用：看看后端到底传过来了什么
+            console.log("Raw config from Go:", rawConfig); 
+            config = internal.Config.createFrom(rawConfig);
+        } catch (error) {
+            console.error('Failed to load config:', error);
         }
-    };
+
+        try {
+            // 1. 页面加载时从系统读取真实的自启状态
+            const isAutoStart = await IsAutoStartCheck();
+            if (isAutoStart != config.general.launchAtLogin) {
+                config.general.launchAtLogin = isAutoStart;
+            }
+        } catch (err) {
+            console.error("读取自启状态失败:", err);
+        }
+    });
 
     const dispatch = createEventDispatcher();
 
-    // 侧边栏菜单配置（拓展性核心：想加新页面，在这里加一项即可）
     const tabs = [
         { id: 'general', label: '常规 (General)', icon: '⚙️' },
         { id: 'shortcuts', label: '快捷键 (Hotkeys)', icon: '⌨️' },
@@ -39,7 +47,7 @@
     // 保存设置
     function save() {
         // TODO: 调用 Wails SaveConfig(config)
-        console.log("Saving config:", config);
+        UpdateConfig(config);
         close();
     }
 
@@ -47,118 +55,116 @@
     function recordShortcut(key) {
         alert(`正在监听 ${key} 的新按键... (逻辑需对接 gohook)`);
     }
+
+    async function syncAutoStart(enabled) {
+        try {
+            await ToggleAutoStart(enabled);
+            LogInfo("开机自启状态已更新:" + enabled);
+        } catch (err) {
+            LogInfo("设置自启失败:" + err);
+            // 如果失败，可以考虑把前端状态回滚
+            // config.general.launchAtLogin = !enabled;
+        }
+    }
 </script>
 
 <!-- 遮罩层：点击空白处关闭 -->
-<div class="overlay" transition:fade={{duration: 100}} on:click={close} on:keydown={e => e.key === 'Escape' && close()}>
-    
-    <!-- 设置窗口主体 -->
-    <div class="settings-window" transition:fly={{y: 10, duration: 200}} on:click|stopPropagation on:keydown={e => e.key === 'Escape' && close()}>
+ {#if config}
+    <div class="overlay" transition:fade={{duration: 100}} on:click={close} on:keydown={e => e.key === 'Escape' && close()}>
         
-        <!-- 左侧侧边栏 -->
-        <div class="sidebar">
-            <div class="sidebar-title">Settings</div>
-            <ul class="nav-list">
-                {#each tabs as tab}
-                    <li 
-                        class:active={activeTab === tab.id} 
-                        on:click={() => activeTab = tab.id}
-                        on:keydown={e => e.key === 'Escape' && close()}
-                    >
-                        <span class="nav-icon">{tab.icon}</span>
-                        {tab.label}
-                    </li>
-                {/each}
-            </ul>
-        </div>
-
-        <!-- 右侧内容区 -->
-        <div class="content">
-            <div class="content-header">
-                <h2>{tabs.find(t => t.id === activeTab).label}</h2>
+        <!-- 设置窗口主体 -->
+        <div class="settings-window" transition:fly={{y: 10, duration: 200}} on:click|stopPropagation on:keydown={e => e.key === 'Escape' && close()}>
+            
+            <!-- 左侧侧边栏 -->
+            <div class="sidebar">
+                <div class="sidebar-title">Settings</div>
+                <ul class="nav-list">
+                    {#each tabs as tab}
+                        <li
+                            class:active={activeTab === tab.id} 
+                            on:click={() => activeTab = tab.id}
+                            on:keydown={e => e.key === 'Escape' && close()}>
+                            <span class="nav-icon">{tab.icon}</span>
+                            {tab.label}
+                        </li>
+                    {/each}
+                </ul>
             </div>
 
-            <div class="content-body">
-                <!-- Tab 1: 常规设置 -->
-                {#if activeTab === 'general'}
-                    <div class="setting-group" in:fade={{duration:150}}>
-                        <div class="setting-row">
-                            <div class="setting-info">
-                                <label>开机自启</label>
-                                <span class="desc">登录时自动启动 Quick-Clip</span>
-                            </div>
-                            <!-- iOS 风格开关 -->
-                            <label class="toggle-switch">
-                                <input type="checkbox" bind:checked={config.general.launchAtLogin}>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
+            <!-- 右侧内容区 -->
+            <div class="content">
+                <div class="content-header">
+                    <h2>{tabs.find(t => t.id === activeTab)?.label || ''}</h2>
+                </div>
 
-                        <div class="setting-row">
-                            <div class="setting-info">
-                                <label>历史记录上限</label>
-                                <span class="desc">保留多少条剪贴板记录</span>
+                <div class="content-body">
+                    <!-- Tab 1: 常规设置 -->
+                    {#if activeTab === 'general'}
+                        <div class="setting-group" in:fade={{duration:150}}>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <label>开机自启</label>
+                                    <span class="desc">登录时自动启动 Quick-Clip</span>
+                                </div>
+                                <!-- iOS 风格开关 -->
+                                <label class="toggle-switch">
+                                    <input type="checkbox" 
+                                    bind:checked={config.general.launchAtLogin} 
+                                    on:change={() => syncAutoStart(config.general.launchAtLogin)}>
+                                    <span class="slider"></span>
+                                </label>
                             </div>
-                            <input type="number" class="input-number" bind:value={config.general.maxHistory}>
                         </div>
+                    {/if}
+
+                    <!-- Tab 2: 快捷键 -->
+                    {#if activeTab === 'shortcuts'}
+                        <div class="setting-group" in:fade={{duration:150}}>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <label>唤醒快捷键</label>
+                                </div>
+                                <button class="shortcut-btn" on:click={() => recordShortcut('wakeUp')}>
+                                    {config.shortcuts.wakeUp}
+                                </button>
+                            </div>
+                        </div>
+                    {/if}
+
+                    <!-- Tab 3: 外观 -->
+                    {#if activeTab === 'appearance'}
+                        <div class="setting-group" in:fade={{duration:150}}>
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <label>窗口透明度</label>
+                                </div>
+                                <div class="range-wrapper">
+                                    <input type="range" min="0.5" max="1" step="0.05" bind:value={config.appearance.opacity}>
+                                    <span>{Math.round(config.appearance.opacity * 100)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+
+                    <!-- Tab 4: 关于 -->
+                    {#if activeTab === 'about'}
+                    <div class="about-section" in:fade={{duration:150}}>
+                        <h3>Quick-Clip</h3>
+                        <p>@Drawye</p>
+                        <p class="desc">A compact clipboard manager for efficiency.</p>
                     </div>
                 {/if}
+                </div>
 
-                <!-- Tab 2: 快捷键 -->
-                {#if activeTab === 'shortcuts'}
-                    <div class="setting-group" in:fade={{duration:150}}>
-                        <div class="setting-row">
-                            <div class="setting-info">
-                                <label>唤醒窗口</label>
-                            </div>
-                            <button class="shortcut-btn" on:click={() => recordShortcut('wakeUp')}>
-                                {config.shortcuts.wakeUp}
-                            </button>
-                        </div>
-                        <div class="setting-row">
-                            <div class="setting-info">
-                                <label>快速粘贴</label>
-                            </div>
-                            <button class="shortcut-btn" on:click={() => recordShortcut('quickPaste')}>
-                                {config.shortcuts.quickPaste}
-                            </button>
-                        </div>
-                    </div>
-                {/if}
-
-                <!-- Tab 3: 外观 -->
-                {#if activeTab === 'appearance'}
-                    <div class="setting-group" in:fade={{duration:150}}>
-                         <div class="setting-row">
-                            <div class="setting-info">
-                                <label>窗口透明度</label>
-                            </div>
-                            <div class="range-wrapper">
-                                <input type="range" min="0.5" max="1" step="0.05" bind:value={config.appearance.opacity}>
-                                <span>{Math.round(config.appearance.opacity * 100)}%</span>
-                            </div>
-                        </div>
-                    </div>
-                {/if}
-
-                 <!-- Tab 4: 关于 -->
-                 {#if activeTab === 'about'}
-                 <div class="about-section" in:fade={{duration:150}}>
-                     <h3>Quick-Clip</h3>
-                     <p>Version 1.0.0</p>
-                     <p class="desc">A compact clipboard manager for efficiency.</p>
-                 </div>
-             {/if}
-            </div>
-
-            <!-- 底部按钮 -->
-            <div class="content-footer">
-                <button class="btn-cancel" on:click={close}>取消</button>
-                <button class="btn-save" on:click={save}>保存修改</button>
+                <!-- 底部按钮 -->
+                <div class="content-footer">
+                    <button class="btn-cancel" on:click={close}>取消</button>
+                    <button class="btn-save" on:click={save}>保存修改</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
+{/if}
 
 <style>
     /* 全局变量继承你的 App 风格 */
@@ -265,16 +271,6 @@
 
     .setting-info label { font-weight: 500; color: #333; margin-bottom: 2px; }
     .setting-info .desc { color: #999; font-size: 12px; }
-
-    /* 输入框样式 */
-    .input-number {
-        width: 60px;
-        padding: 4px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        text-align: right;
-    }
-    .input-number:focus { border-color: #3b82f6; outline: none; }
 
     /* 快捷键按钮模拟 */
     .shortcut-btn {

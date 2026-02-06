@@ -27,13 +27,7 @@ type App struct {
 }
 
 // NewApp creates a new App application struct
-func NewApp(action *internal.Action) *App {
-	configManager := internal.NewConfigManager()
-	config, err := configManager.Load()
-	if err != nil {
-		return nil
-	}
-
+func NewApp(action *internal.Action, configManager *internal.ConfigManager, config *internal.Config) *App {
 	configDir, _ := os.UserConfigDir()
 	appConfigDir := filepath.Join(configDir, "quick-clip", "data") // 替换为你的应用名
 	os.MkdirAll(appConfigDir, 0755)
@@ -75,7 +69,7 @@ func (a *App) startup(ctx context.Context) {
 	err = json.Unmarshal(content, &a.content)
 
 	// 注册全局热键
-	a.registerGlobalHotkey()
+	a.RegisterGlobalHotkey(a.config.Shortcuts.WakeUp[0], a.config.Shortcuts.WakeUp[1])
 
 	// 注册窗口句柄
 	go func() {
@@ -131,11 +125,16 @@ func (a *App) saveToFile() {
 	}
 }
 
-func (a *App) registerGlobalHotkey() {
+func (a *App) RegisterGlobalHotkey(key1 string, key2 string) {
 	go func() {
-		// 注册 Alt + Space
-		// ModAlt, KeySpace 需要根据库的定义
-		hk := hotkey.New([]hotkey.Modifier{hotkey.ModAlt}, hotkey.KeyQ)
+		// 从映射中获取 Modifier 和 Key
+		modifier, ok1 := internal.HotKeyMap[key1].(hotkey.Modifier)
+		key, ok2 := internal.HotKeyMap[key2].(hotkey.Key)
+		if !ok1 || !ok2 {
+			return
+		}
+
+		hk := hotkey.New([]hotkey.Modifier{modifier}, key)
 		err := hk.Register()
 		if err != nil {
 			return

@@ -3,9 +3,9 @@ module quick-clip
 go 1.24.0
 
 require (
+	github.com/emersion/go-autostart v0.0.0-20250403115856-34830d6457d2
 	github.com/energye/systray v1.0.2
 	github.com/json-iterator/go v1.1.12
-	github.com/robotn/gohook v0.42.3
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.design/x/hotkey v0.4.1
 )
@@ -13,7 +13,6 @@ require (
 require (
 	github.com/dblohm7/wingoes v0.0.0-20250822163801-6d8e6105c62d // indirect
 	github.com/tailscale/win v0.0.0-20250627215312-f4da2b8ee071
-	github.com/vcaesar/keycode v0.10.1 // indirect
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39 // indirect
 	golang.org/x/image v0.33.0 // indirect
 )

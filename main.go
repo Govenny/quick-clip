@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"quick-clip/internal"
@@ -18,8 +19,12 @@ var assets embed.FS
 
 func main() {
 	action := internal.NewAction()
+	configManager := internal.NewConfigManager()
+	config, _ := configManager.Load()
+	fmt.Println(config)
 	trayMgr := internal.NewTrayManager(action)
-	app := NewApp(action)
+	app := NewApp(action, configManager, config)
+	appService := internal.NewAppService()
 
 	configDir, _ := os.UserConfigDir()
 	appRoot := filepath.Join(configDir, "quick-clip")
@@ -32,7 +37,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 0},
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
 			// 如果不是通过托盘点击“退出”的，就只隐藏窗口，不关闭
 			if !trayMgr.IsQuitting() {
@@ -52,6 +57,7 @@ func main() {
 		Bind: []interface{}{
 			app,
 			action,
+			appService,
 		},
 		Frameless:   true,
 		AlwaysOnTop: true,
@@ -59,6 +65,10 @@ func main() {
 			// 允许窗口在失去焦点时继续渲染
 			WebviewGpuIsDisabled: false,
 			WebviewUserDataPath:  filepath.Join(appRoot, "cache"),
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
+			// 可选：设置背景类型（如 Mica, Acrylic 等磨砂效果）
+			BackdropType: windows.Mica,
 		},
 	})
 
