@@ -14,6 +14,7 @@ export namespace internal {
 	}
 	export class ShortcutsConfig {
 	    wakeUp: string[];
+	    pasteWaitTime: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ShortcutsConfig(source);
@@ -22,6 +23,7 @@ export namespace internal {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.wakeUp = source["wakeUp"];
+	        this.pasteWaitTime = source["pasteWaitTime"];
 	    }
 	}
 	export class GeneralConfig {

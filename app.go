@@ -61,15 +61,17 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 
-	// decrypted, err := internal.DecryptBytes(content, a.keys)
-	// if err != nil {
-	// 	return
-	// }
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(content, &a.content)
+	decrypted, err := internal.DecryptBytes(content, a.keys)
+	if err != nil {
+		return
+	}
 
-	// 注册全局热键
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	err = json.Unmarshal(decrypted, &a.content)
+
+	// 根据config初始化注册相关配置
 	a.RegisterGlobalHotkey(a.config.Shortcuts.WakeUp[0], a.config.Shortcuts.WakeUp[1])
+	a.action.SetTransparency(uint8(a.config.Appearance.Opacity))
 
 	// 注册窗口句柄
 	go func() {
@@ -114,12 +116,12 @@ func (a *App) saveToFile() {
 		return
 	}
 
-	// resource, err := internal.EncryptBytes(byteData, a.keys)
-	// if err != nil {
-	// 	return
-	// }
+	resource, err := internal.EncryptBytes(byteData, a.keys)
+	if err != nil {
+		return
+	}
 
-	err = os.WriteFile(a.dataPath, byteData, 0644)
+	err = os.WriteFile(a.dataPath, resource, 0644)
 	if err != nil {
 		return
 	}
@@ -173,7 +175,7 @@ func (a *App) PasteAndHide() {
 	a.action.RestoreFocus(a.lastHwnd)
 
 	// 3. 等待并粘贴
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(time.Duration(a.config.Shortcuts.PasteWaitTime) * time.Millisecond)
 	go a.action.SendPaste()
 }
 
@@ -192,7 +194,7 @@ func (a *App) GetConfig() *internal.Config {
 	return a.config
 }
 
-// UpdateConfig 供前端更新配置
+// UpdateConfig 供前端更新配置, 存在写入操作
 func (a *App) UpdateConfig(newCfg *internal.Config) string {
 	a.config = newCfg
 	err := a.configManager.Save(newCfg)
@@ -201,4 +203,9 @@ func (a *App) UpdateConfig(newCfg *internal.Config) string {
 	}
 	// 这里可以触发一些逻辑更新，比如修改了热键后重新注册热键
 	return "success"
+}
+
+func (a *App) SetOpacity(opacity uint8) {
+	a.config.Appearance.Opacity = opacity
+	a.action.SetTransparency(opacity)
 }

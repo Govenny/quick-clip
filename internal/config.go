@@ -11,11 +11,12 @@ type GeneralConfig struct {
 }
 
 type ShortcutsConfig struct {
-	WakeUp [2]string `json:"wakeUp"`
+	WakeUp        [2]string `json:"wakeUp"`
+	PasteWaitTime int       `json:"pasteWaitTime"`
 }
 
 type AppearanceConfig struct {
-	Opacity float64 `json:"opacity"`
+	Opacity uint8 `json:"opacity"`
 }
 
 type Config struct {
@@ -52,10 +53,11 @@ func (m *ConfigManager) Load() (*Config, error) {
 				LaunchAtLogin: false,
 			},
 			ShortcutsConfig{
-				WakeUp: [2]string{"Alt", "Space"},
+				WakeUp:        [2]string{"Alt", "Space"},
+				PasteWaitTime: 100,
 			},
 			AppearanceConfig{
-				Opacity: 0.95,
+				Opacity: 250,
 			},
 		}, nil
 	}

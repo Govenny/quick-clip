@@ -1,7 +1,7 @@
 <script>
 import { createEventDispatcher, onMount } from 'svelte';
     import { fade, fly } from 'svelte/transition';
-    import { GetConfig, UpdateConfig, RegisterGlobalHotkey } from "../../wailsjs/go/main/App"
+    import { GetConfig, UpdateConfig, RegisterGlobalHotkey, SetOpacity } from "../../wailsjs/go/main/App"
     import { ToggleAutoStart, IsAutoStartCheck } from "../../wailsjs/go/internal/AppService"
     import { LogInfo } from '../../wailsjs/runtime/runtime';
     import { internal } from "../../wailsjs/go/models"
@@ -24,6 +24,19 @@ import { createEventDispatcher, onMount } from 'svelte';
         LogInfo("新快捷键:" + config.shortcuts.wakeUp);
         RegisterGlobalHotkey(config.shortcuts.wakeUp[0], config.shortcuts.wakeUp[1]);
     }
+
+    function updateOpacity() {
+        config.appearance.opacity = Number(config.appearance.opacity);
+        LogInfo("新透明度:" + config.appearance.opacity);
+        SetOpacity(config.appearance.opacity);
+        UpdateConfig(config);
+    }
+
+    function updatePasteWaitTime() {
+        config.shortcuts.pasteWaitTime = Number(config.shortcuts.pasteWaitTime);
+        LogInfo("新等待时间:" + config.shortcuts.pasteWaitTime);
+        UpdateConfig(config);
+    }    
 
     onMount(async () => {
         try {
@@ -156,6 +169,21 @@ import { createEventDispatcher, onMount } from 'svelte';
                                     </select>
                                 </div>
                             </div>
+
+                            <div class="setting-row">
+                                <div class="setting-info">
+                                    <label>粘贴等待时间</label>
+                                    <span class="desc">粘贴操作前等待的时间,应对卡顿,默认100ms</span>
+                                </div>
+
+                                <div class="range-wrapper">
+                                    <input type="range" min="25" max="1000" step="25" 
+                                    bind:value={config.shortcuts.pasteWaitTime}
+                                    on:change={updatePasteWaitTime}
+                                    >
+                                    <span>{config.shortcuts.pasteWaitTime}ms</span>
+                                </div>
+                            </div>
                         </div>
                     {/if}
 
@@ -167,8 +195,11 @@ import { createEventDispatcher, onMount } from 'svelte';
                                     <label>窗口透明度</label>
                                 </div>
                                 <div class="range-wrapper">
-                                    <input type="range" min="0.5" max="1" step="0.05" bind:value={config.appearance.opacity}>
-                                    <span>{Math.round(config.appearance.opacity * 100)}%</span>
+                                    <input type="range" min="25" max="255" step="1" 
+                                    bind:value={config.appearance.opacity}
+                                    on:change={updateOpacity}
+                                    >
+                                    <span>{(config.appearance.opacity / 255).toFixed(2)}%</span>
                                 </div>
                             </div>
                         </div>
@@ -298,7 +329,7 @@ import { createEventDispatcher, onMount } from 'svelte';
     }
 
     .setting-info label { font-weight: 500; color: #333; margin-bottom: 2px; }
-    .setting-info .desc { color: #999; font-size: 12px; }
+    .setting-info .desc { color: #999; font-size: 10px; }
 
     .content-footer {
         padding: 10px 20px;

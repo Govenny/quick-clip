@@ -12,6 +12,10 @@
     let isHovered = false;
     let showSettings = false;
 
+    // 编辑模式
+    let isEditMode = false; // 标记当前是编辑还是新增
+    let editingPath = "";
+
     // 添加目录
     let showDirInput = false;
     let dirName = "";
@@ -149,6 +153,8 @@
     }
 
     function addText() {
+        isEditMode = false; // 新增模式
+        editingPath = ""; // 清空路径
         showTextInput = true;
         titleName = "";
         textName = "";
@@ -190,57 +196,63 @@
     }
 
     function confirmAddText() {
-        if (!isFormValid) {
-            if (!titleName.trim()) {
-                titleInputRef?.focus();
-                alert("请输入名称");
-            } else if (!textName) {
-                textInputRef?.focus();
-                alert("请输入值");
-            } else if (titleName.includes(".")) {
-                titleInputRef?.focus();
-                alert("名称不能包含.");
-            }
+        // 简单校验
+        if (!titleName.trim() || !textName) {
+            alert("请完善输入");
+            return;
+        }
+        if (titleName.includes(".")) {
+            alert("名称不能包含.");
             return;
         }
 
-        if (titleName.trim() !== "" && textName.trim() !== "") {
-            if (globalContextMenu.isFolder) {
-                // 文件夹下添加文本
-                const folderKey = globalContextMenu.targetKey; // 例如 "0.士大夫大师傅.0.士大夫"
-                const pathParts = folderKey.split('.');
+        const newKey = titleName.trim();
+        const newVal = textName;
+
+        if (isEditMode) {
+            // --- 编辑逻辑 ---
+            try {
+                // 1. 获取父数组、索引、旧名称
+                const { parentArr, targetIndex, oldKey } = getParentArrayAndIndex(editingPath);
                 
-                // 递归访问嵌套结构
+                // 2. 找到该对象
+                const itemObj = parentArr[targetIndex];
+                
+                // 3. 修改逻辑：如果是改名，需要 delete 旧 key
+                if (oldKey !== newKey) {
+                    delete itemObj[oldKey];
+                }
+                // 4. 写入新 Key-Value
+                itemObj[newKey] = newVal;
+
+                // 强制更新视图
+                if (editingPath.startsWith("0.") || !editingPath.includes(".")) {
+                   // 根目录稍微特殊，直接全量更新最稳
+                   data = [...data]; 
+                }
+            } catch (e) {
+                console.error("编辑失败", e);
+            }
+        } else {
+            // --- 新增逻辑 (保持原样) ---
+            const newItem = { [newKey]: newVal };
+            if (globalContextMenu.isFolder) {
+                // 如果是在文件夹上右键新增
+                // 需要解析 globalContextMenu.targetKey 找到那个文件夹数组
+                const pathParts = globalContextMenu.targetKey.split('.');
                 let current = data;
                 for (let i = 0; i < pathParts.length; i += 2) {
-                    const index = parseInt(pathParts[i]);
-                    const key = pathParts[i + 1];
-                    
-                    // 获取当前层级的数组
-                    const arr = current[index];
-                    
-                    // 获取数组中对应 key 的值（应该是一个数组）
-                    current = arr[key];
+                    current = current[parseInt(pathParts[i])][pathParts[i+1]];
                 }
-                
-                // 现在 current 指向目标文件夹的数组
-                if (Array.isArray(current)) {
-                    const newDir = { [titleName.trim()]: textName };
-                    current.push(newDir);
-                }
-        } else {
-            // 根目录添加文本
-            const newDir = { [titleName.trim()]: textName };
-            data = [...data, newDir];
+                current.push(newItem);
+            } else {
+                // 根目录新增
+                data = [...data, newItem];
+            }
         }
 
-        
-        updateData(data);
-        cleanGlobalContextMenu();
-        titleName = "";
-        textName = "";
-        showTextInput = false;
-    }
+        updateData(data); // 保存
+        cancelAddText();
     }
 
     function cancelAddText() {
@@ -250,12 +262,29 @@
         cleanGlobalContextMenu();
     }
 
+    function editText() {
+        isEditMode = true;
+        editingPath = globalContextMenu.targetKey; // 保存完整路径：0.FolderA.1.KeyName
+        showTextInput = true;
+        
+        // 【修复点1】只截取最后一段作为名称显示
+        titleName = globalContextMenu.targetKey.split('.').pop(); 
+        textName = globalContextMenu.targetValue;
+        
+        showMenu = false;
+        hideContextMenu();
+
+        tick().then(() => titleInputRef?.focus());
+    }
+
     // 自动聚焦
     $: if (showTextInput && titleInputRef) {
         setTimeout(() => titleInputRef.focus(), 0);
     }
 
     function addDir() {
+        isEditMode = false; // 新增模式
+        editingPath = ""; // 清空路径
         showDirInput = true;
         dirName = "";
         showMenu = false;
@@ -269,43 +298,45 @@
     }
 
     function confirmAddDir() {
-        const dirNameTrim = dirName.trim();
-        if (dirNameTrim.includes(".")) {
-            dirInputRef?.focus();
-            alert("名称不能包含.");
+        const newDirName = dirName.trim();
+        if (!newDirName || newDirName.includes(".")) {
+            alert("名称无效");
             return;
         }
-        if (dirNameTrim !== "") {
-            if (globalContextMenu.isFolder) {
-                const folderKey = globalContextMenu.targetKey; // 例如 "0.士大夫大师傅.0.士大夫"
-                const pathParts = folderKey.split('.'); // ["0", "士大夫大师傅", "0", "士大夫"]
 
-                // 递归访问嵌套结构
+        if (isEditMode) {
+            // --- 编辑逻辑 ---
+            try {
+                const { parentArr, targetIndex, oldKey } = getParentArrayAndIndex(editingPath);
+                const itemObj = parentArr[targetIndex];
+
+                // 文件夹只改名字，必须保留原来的子内容(Value)
+                const children = itemObj[oldKey]; 
+
+                if (oldKey !== newDirName) {
+                    delete itemObj[oldKey];      // 删除旧名
+                    itemObj[newDirName] = children; // 赋给新名，内容不变
+                }
+            } catch (e) {
+                console.error("文件夹编辑失败", e);
+            }
+        } else {
+            // --- 新增逻辑 (保持原样) ---
+            const newItem = { [newDirName]: [] };
+            if (globalContextMenu.isFolder) {
+                 // 逻辑同 Text 新增
+                const pathParts = globalContextMenu.targetKey.split('.');
                 let current = data;
                 for (let i = 0; i < pathParts.length; i += 2) {
-                    const index = parseInt(pathParts[i]);
-                    const key = pathParts[i + 1];
-                    
-                    // 获取当前层级的数组
-                    const arr = current[index];
-                    
-                    // 获取数组中对应 key 的值（应该是一个数组）
-                    current = arr[key];
+                    current = current[parseInt(pathParts[i])][pathParts[i+1]];
                 }
-                
-                // 现在 current 指向目标文件夹的数组
-                if (Array.isArray(current)) {
-                    const newDir = { [dirNameTrim]: [] };
-                    current.push(newDir);
-                }
+                current.push(newItem);
             } else {
-                // 在根目录添加文件夹
-                const newDir = { [dirNameTrim]: [] };
-                data = [...data, newDir];
+                data = [...data, newItem];
             }
-            
-            updateData(data);
         }
+
+        updateData(data);
         showDirInput = false;
     }
 
@@ -313,6 +344,20 @@
         showDirInput = false;
         dirName = "";
         cleanGlobalContextMenu();
+    }
+
+    function editDir() {
+        isEditMode = true;
+        editingPath = globalContextMenu.targetKey; // 保存完整路径
+        showDirInput = true;
+        
+        // 【修复点1】只显示名称，不显示路径
+        dirName = globalContextMenu.targetKey.split('.').pop();
+        
+        showMenu = false;
+        hideContextMenu();
+
+        tick().then(() => dirInputRef?.focus());
     }
 
     function cancelMenu() {
@@ -356,6 +401,30 @@
     function updateData(newData) {
         data = newData;
         SaveContent(data);
+    }
+
+    function getParentArrayAndIndex(pathStr) {
+        const parts = pathStr.split('.');
+        // parts = ["0", "FolderA", "1", "FolderB"]
+        
+        // 弹出最后两项：Key名 和 Index
+        const keyName = parts.pop(); // "FolderB"
+        const indexStr = parts.pop(); // "1"
+        const index = parseInt(indexStr);
+
+        // 剩下的 parts 就是通往父级数组的路径 ["0", "FolderA"]
+        let currentArr = data;
+        
+        // 如果还有剩余路径，说明不是根目录
+        if (parts.length > 0) {
+            for (let i = 0; i < parts.length; i += 2) {
+                const pIndex = parseInt(parts[i]);
+                const pKey = parts[i+1];
+                currentArr = currentArr[pIndex][pKey];
+            }
+        }
+        
+        return { parentArr: currentArr, targetIndex: index, oldKey: keyName };
     }
 
 </script>
@@ -439,6 +508,18 @@
                 }
             }}>New Folder</div>
         <div class="menu-divider"></div>
+        <div class="menu-item" on:click={editDir} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                }
+            }}>Edit</div>
+        <div class="menu-divider"></div>
+    {/if}
+    {#if !globalContextMenu.isFolder}
+        <div class="menu-item" on:click={editText} on:keyup={(e) => {
+                if (e.key === 'Enter') {
+                }
+            }}>Edit</div>
+        <div class="menu-divider"></div>
     {/if}
     <div class="menu-item delete" on:click={deleteItem} on:keyup={(e) => {
                 if (e.key === 'Enter') {
@@ -452,6 +533,7 @@
     <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} transition:fade={{duration: 80}}>
         <div class="modal-box compact" on:keyup|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
             <input type="text" bind:value={dirName} bind:this={dirInputRef} placeholder="Folder Name" 
+                on:click={(e) => e.stopPropagation()}
                 on:keydown={(e) => { if (e.key === 'Enter') confirmAddDir(); if (e.key === 'Escape') cancelAddDir(); }}/>
         </div>
     </div>
@@ -463,7 +545,7 @@
         <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
             <div class="input-group">
                 <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
-                <input type="text" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
+                <input type="password" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
             </div>
             <div class="modal-footer">
                 <span class="hint">Tab to change box / Enter to save</span>

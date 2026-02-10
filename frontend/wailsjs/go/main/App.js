@@ -34,6 +34,10 @@ export function SaveContent(arg1) {
   return window['go']['main']['App']['SaveContent'](arg1);
 }
 
+export function SetOpacity(arg1) {
+  return window['go']['main']['App']['SetOpacity'](arg1);
+}
+
 export function ToggleWindow() {
   return window['go']['main']['App']['ToggleWindow']();
 }

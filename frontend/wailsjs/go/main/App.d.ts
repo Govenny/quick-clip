@@ -18,6 +18,8 @@ export function RegisterGlobalHotkey(arg1:string,arg2:string):Promise<void>;
 
 export function SaveContent(arg1:Array<any>):Promise<void>;
 
+export function SetOpacity(arg1:number):Promise<void>;
+
 export function ToggleWindow():Promise<void>;
 
 export function UpdateConfig(arg1:internal.Config):Promise<string>;

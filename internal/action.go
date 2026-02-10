@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	user32                       = syscall.NewLazyDLL("user32.dll")
-	procAttachThreadInput        = user32.NewProc("AttachThreadInput")
-	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	procEnumWindows              = user32.NewProc("EnumWindows")
+	user32                         = syscall.NewLazyDLL("user32.dll")
+	procAttachThreadInput          = user32.NewProc("AttachThreadInput")
+	procGetWindowThreadProcessId   = user32.NewProc("GetWindowThreadProcessId")
+	procEnumWindows                = user32.NewProc("EnumWindows")
+	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
 )
 
 const (
@@ -26,6 +27,8 @@ const (
 	SWP_HIDEWINDOW   = 0x0080
 	GA_ROOT          = 2
 	WS_EX_TOOLWINDOW = 0x00000080 // 设为工具窗口，不显示在任务栏，且减少对焦点的干扰
+	LWA_ALPHA        = 0x00000002
+	WS_EX_LAYERED    = 0x00080000
 )
 
 type Action struct {
@@ -227,5 +230,25 @@ func (a *Action) SetSizeNative(width, height int) {
 		int32(width),
 		int32(height),
 		win.SWP_NOMOVE|win.SWP_NOZORDER,
+	)
+}
+
+func (a *Action) SetTransparency(alpha uint8) {
+	if a.selfHwnd == 0 {
+		return
+	}
+
+	// 获取当前扩展样式
+	exStyle := win.GetWindowLong(a.selfHwnd, GWL_EXSTYLE)
+
+	// 设置分层窗口样式
+	win.SetWindowLong(a.selfHwnd, GWL_EXSTYLE, exStyle|WS_EX_LAYERED)
+
+	// 设置透明度
+	procSetLayeredWindowAttributes.Call(
+		uintptr(a.selfHwnd),
+		0, // 颜色键，这里不使用颜色键
+		uintptr(alpha),
+		LWA_ALPHA,
 	)
 }

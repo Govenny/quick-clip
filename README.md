@@ -51,6 +51,7 @@ wails dev
 
 # 打包正式版
 wails build
+
 ⚙️ 设置选项
 
 通过托盘菜单进入 Settings 页面，你可以：
