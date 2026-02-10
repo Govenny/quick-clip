@@ -18,6 +18,14 @@ export function GetContent() {
   return window['go']['main']['App']['GetContent']();
 }
 
+export function GetDataPath() {
+  return window['go']['main']['App']['GetDataPath']();
+}
+
+export function GetKeys() {
+  return window['go']['main']['App']['GetKeys']();
+}
+
 export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
 }

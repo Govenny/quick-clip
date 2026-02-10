@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+
 	"os"
 	"path/filepath"
 	"quick-clip/internal"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/tailscale/win"
 	"golang.design/x/hotkey" // 注意：这个库通常要求在主线程初始化
 )
@@ -47,27 +46,13 @@ func NewApp(action *internal.Action, configManager *internal.ConfigManager, conf
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	content, err := os.ReadFile(a.dataPath)
-	if os.IsNotExist(err) {
-		// 文件不存在，创建文件并写入初始数据
-		initialData := []byte("[]") // 空的JSON数组
-		err = os.WriteFile(a.dataPath, initialData, 0644)
-		if err != nil {
-			return
-		}
-		content = initialData // 使用刚创建的初始数据
-	} else if err != nil {
-		// 其他读取错误
-		return
+	resource := internal.ReadContent(a.dataPath, a.keys)
+	if resource == nil {
+		// 如果读取失败（可能是解密失败），初始化为空数组，防止程序崩溃
+		a.content = make([]any, 0)
+	} else {
+		a.content = resource
 	}
-
-	decrypted, err := internal.DecryptBytes(content, a.keys)
-	if err != nil {
-		return
-	}
-
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(decrypted, &a.content)
 
 	// 根据config初始化注册相关配置
 	a.RegisterGlobalHotkey(a.config.Shortcuts.WakeUp[0], a.config.Shortcuts.WakeUp[1])
@@ -96,7 +81,7 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is about to close
 func (a *App) shutdown(ctx context.Context) {
-	a.saveToFile()
+	internal.SaveContent(a.dataPath, a.keys, a.content)
 }
 
 func (a *App) GetContent() []any {
@@ -105,26 +90,7 @@ func (a *App) GetContent() []any {
 
 func (a *App) SaveContent(data []any) {
 	a.content = data
-	a.saveToFile()
-}
-
-func (a *App) saveToFile() {
-	byteData, err := json.Marshal(a.content)
-	if err != nil {
-		return
-	} else if byteData == nil {
-		return
-	}
-
-	resource, err := internal.EncryptBytes(byteData, a.keys)
-	if err != nil {
-		return
-	}
-
-	err = os.WriteFile(a.dataPath, resource, 0644)
-	if err != nil {
-		return
-	}
+	internal.SaveContent(a.dataPath, a.keys, a.content)
 }
 
 func (a *App) RegisterGlobalHotkey(key1 string, key2 string) {
@@ -208,4 +174,12 @@ func (a *App) UpdateConfig(newCfg *internal.Config) string {
 func (a *App) SetOpacity(opacity uint8) {
 	a.config.Appearance.Opacity = opacity
 	a.action.SetTransparency(opacity)
+}
+
+func (a *App) GetDataPath() string {
+	return a.dataPath
+}
+
+func (a *App) GetKeys() string {
+	return a.keys
 }

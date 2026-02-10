@@ -10,6 +10,10 @@ export function GetConfig():Promise<internal.Config>;
 
 export function GetContent():Promise<Array<any>>;
 
+export function GetDataPath():Promise<string>;
+
+export function GetKeys():Promise<string>;
+
 export function HideWindow():Promise<void>;
 
 export function PasteAndHide():Promise<void>;
