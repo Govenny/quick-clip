@@ -561,7 +561,7 @@
         <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
             <div class="input-group">
                 <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
-                <input type="password" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
+                <input type="text" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
             </div>
             <div class="modal-footer">
                 <span class="hint">Tab to change box / Enter to save</span>
