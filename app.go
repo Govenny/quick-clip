@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"os"
 	"path/filepath"
@@ -90,6 +91,7 @@ func (a *App) GetContent() []any {
 
 func (a *App) SaveContent(data []any) {
 	a.content = data
+	fmt.Println(a.content)
 	internal.SaveContent(a.dataPath, a.keys, a.content)
 }
 

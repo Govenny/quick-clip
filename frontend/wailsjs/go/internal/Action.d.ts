@@ -9,6 +9,8 @@ export function FindRealWailsWindow():Promise<win.HWND>;
 
 export function Hide():Promise<void>;
 
+export function ImportJson(arg1:context.Context):Promise<Array<any>>;
+
 export function RecordActiveWindow():Promise<win.HWND>;
 
 export function RestoreFocus(arg1:win.HWND):Promise<void>;

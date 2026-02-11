@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	_ "embed" // 必须引入
+	"time"
 
 	"github.com/energye/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -10,6 +11,7 @@ import (
 
 type AppInterface interface {
 	GetContent() []any
+	SaveContent(content []any)
 }
 
 //go:embed asset/icon32.png
@@ -107,6 +109,7 @@ func (tm *TrayManager) onReady() {
 	mShow := systray.AddMenuItem("显示主界面", "显示窗口")
 	mHotkey := systray.AddMenuItem("设置", "设置页面")
 	mOut := systray.AddMenuItem("导出", "导出Json")
+	mIn := systray.AddMenuItem("导入", "导入Json")
 	mQuit := systray.AddMenuItem("退出", "退出程序")
 
 	// 2. 【核心修改】使用回调函数，而不是 Channel
@@ -134,6 +137,16 @@ func (tm *TrayManager) onReady() {
 	// 导出Json
 	mOut.Click(func() {
 		tm.action.ExportJson(tm.app.GetContent(), tm.ctx)
+	})
+
+	// 导入Json
+	mIn.Click(func() {
+		content := tm.action.ImportJson(tm.ctx)
+		if content != nil {
+			tm.app.SaveContent(content)
+		}
+		time.Sleep(time.Second)
+		runtime.EventsEmit(tm.ctx, "update-content")
 	})
 
 	// 如果需要设置托盘左键点击（显示窗口）

@@ -290,3 +290,37 @@ func (a *Action) ExportJson(content []any, ctx context.Context) {
 	}
 
 }
+
+func (a *Action) ImportJson(ctx context.Context) []any {
+	filePath, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
+		Title:            "导入密码文件(明文)",
+		DefaultDirectory: "",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "JSON文件 (*.json)",
+				Pattern:     "*.json",
+			},
+		},
+	})
+
+	if err != nil {
+		return nil
+	}
+
+	if filePath == "" {
+		return nil
+	}
+
+	// 读取文件
+	byteData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil
+	}
+
+	var content []any
+	err = json.Unmarshal(byteData, &content)
+	if err != nil {
+		return nil
+	}
+	return content
+}

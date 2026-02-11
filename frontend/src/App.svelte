@@ -117,17 +117,32 @@
 		}
 	}
 
+
+    // 监听来自后端的 show-settings 事件
+    const settingsEventListener = async (data) => {
+        showSettings = true;
+        EnterSettingsMode();
+        ToggleWindow();
+    };
+
+    // 监听来自后端的 update-content 事件
+    const contentEventListener = async (payload) => {
+        try {
+            LogInfo("update-content发送成功")
+            const newData = await GetContent();
+            data = newData;
+            await tick();
+        } catch (error) {
+            console.error('Failed to load content:', error);
+        }
+    };
+
     onMount(() => {
         document.addEventListener('click', handleGlobalClick);
         document.addEventListener('contextmenu', hideContextMenu); // 右键其他地方也关闭
 
-        // 监听来自后端的 show-settings 事件
-        const settingsEventListener = async (data) => {
-            showSettings = true;
-            EnterSettingsMode();
-            ToggleWindow();
-        };
         EventsOn("show-settings", settingsEventListener);
+        EventsOn("update-content", contentEventListener);
         
     });
 
@@ -142,6 +157,7 @@
     onDestroy(() => {
         document.removeEventListener('click', handleGlobalClick);
         document.removeEventListener('contextmenu', hideContextMenu);
+
     });
 
     function toggleExpand(key) {

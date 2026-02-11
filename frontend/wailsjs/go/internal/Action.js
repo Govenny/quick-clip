@@ -14,6 +14,10 @@ export function Hide() {
   return window['go']['internal']['Action']['Hide']();
 }
 
+export function ImportJson(arg1) {
+  return window['go']['internal']['Action']['ImportJson'](arg1);
+}
+
 export function RecordActiveWindow() {
   return window['go']['internal']['Action']['RecordActiveWindow']();
 }
