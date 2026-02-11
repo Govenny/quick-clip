@@ -39,18 +39,8 @@ Quick-Clip 是一款基于wails开发的专为效率控设计的轻量级、开�
 开源透明：核心逻辑清晰可见，你可以放心编译使用。
 
 🚀 快速开始
+
 下载运行
-
-直接从 Releases 下载对应系统的安装包。
-
-# 安装依赖
-wails doctor
-
-# 开发模式运行
-wails dev
-
-# 打包正式版
-wails build
 
 ⚙️ 设置选项
 
@@ -60,14 +50,54 @@ wails build
 
 快捷键：配置最顺手的唤醒组合键。
 
-📝 技术栈
-
-Backend: Go
-
-Frontend: Svelte / TS (Wails Framework)
-
-UI Design: CSS3 (iOS 风格组件)
-
-Automation: 系统级模拟输入接口
-
 Quick-Clip —— 让密码管理回归简单与高效。
+
+
+# Quick-Clip
+
+Quick-Clip is a lightweight, open-source desktop password management assistant developed with Wails, designed for efficiency enthusiasts. It not only securely stores your sensitive information but also features "One-Click Navigation" to automatically fill passwords into target applications, eliminating the need for cumbersome copy-paste operations.
+
+✨ **Core Features**
+
+🚀 **Instant Wake-up**: Supports customizable global hotkeys (e.g., Alt + Space), available on demand, and hides immediately after use.
+
+⌨️ **Smart Auto-fill**: After clicking an entry, the application automatically switches back to the last active window and simulates keyboard input for passwords, compatible with all desktop applications and browsers.
+
+🔐 **Military-Grade Encryption**: All data is locally encrypted using AES-256 algorithm, stored offline without cloud uploads, ensuring your privacy remains in your hands.
+
+📂 **Hierarchical Organization**: Supports multi-level directory categorization for clear management of passwords across different scenarios (e.g., testing, social media, finance).
+
+🪶 **Extremely Lightweight**: Built with Wails & WebView2, the installation package is minimal, with runtime memory usage around 100MB.
+
+🎨 **Modern UI**: Elegant sidebar design with adjustable transparency, seamlessly integrating with your desktop aesthetics.
+
+🛠️ **How It Works**
+
+**Invoke**: Press the global hotkey to bring Quick-Clip to the center of your screen.
+
+**Search**: Quickly locate the desired account using the top search bar.
+
+**Fill**: Click on the target entry, and Quick-Clip will:
+   - Automatically hide its current window.
+   - Utilize system-level APIs to return to the previously focused application.
+   - Simulate keyboard strokes to input password characters one by one at the cursor position.
+
+🔒 **Security Notes**
+
+**Local Storage**: Data files are stored in the user's local directory, with no backend interface, physically eliminating the risk of database breaches.
+
+**Encryption Protocol**: Uses random Salt and AES algorithm for full-disk encryption of the JSON database.
+
+**Open Source Transparency**: Core logic is clearly visible, allowing you to compile and use with confidence.
+
+🚀 **Quick Start**
+
+**Download and Run**
+
+⚙️ **Settings Options**
+
+Access the Settings page via the system tray menu, where you can:
+   - **General**: Enable/disable auto-start on boot.
+   - **Hotkeys**: Configure your preferred wake-up key combinations.
+
+**Quick-Clip** — Simplifying password management with efficiency and ease.
