@@ -2,6 +2,9 @@
 
 Quick-Clip 是一款基于wails开发的专为效率控设计的轻量级、开源桌面密码管理助手。它不仅能安全地存储你的敏感信息，更能通过“一键穿梭”功能，自动将密码填入目标程序，彻底告别繁琐的复制粘贴。
 
+<img width="320" height="480" alt="image" src="https://github.com/user-attachments/assets/b0ead354-fe1d-42b5-bc22-090815aa93bc" />
+
+
 ✨ 核心特性
 
 🚀 极速唤醒：支持自定义全局快捷键（如 Alt + Space），随叫随到，用完即隐藏。
