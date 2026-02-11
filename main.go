@@ -22,8 +22,8 @@ func main() {
 	configManager := internal.NewConfigManager()
 	config, _ := configManager.Load()
 	fmt.Println(config)
-	trayMgr := internal.NewTrayManager(action)
 	app := NewApp(action, configManager, config)
+	trayMgr := internal.NewTrayManager(action, app)
 	appService := internal.NewAppService()
 
 	configDir, _ := os.UserConfigDir()

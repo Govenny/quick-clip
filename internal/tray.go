@@ -8,6 +8,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+type AppInterface interface {
+	GetContent() []any
+}
+
 //go:embed asset/icon32.png
 var iconData []byte
 
@@ -15,12 +19,14 @@ type TrayManager struct {
 	ctx        context.Context
 	isQuitting bool
 	action     *Action
+	app        AppInterface
 }
 
-func NewTrayManager(action *Action) *TrayManager {
+func NewTrayManager(action *Action, app AppInterface) *TrayManager {
 	return &TrayManager{
 		isQuitting: false,
 		action:     action,
+		app:        app,
 	}
 }
 
@@ -100,6 +106,7 @@ func (tm *TrayManager) onReady() {
 	// 1. 添加菜单项
 	mShow := systray.AddMenuItem("显示主界面", "显示窗口")
 	mHotkey := systray.AddMenuItem("设置", "设置页面")
+	mOut := systray.AddMenuItem("导出", "导出Json")
 	mQuit := systray.AddMenuItem("退出", "退出程序")
 
 	// 2. 【核心修改】使用回调函数，而不是 Channel
@@ -122,6 +129,11 @@ func (tm *TrayManager) onReady() {
 	// 热键设置
 	mHotkey.Click(func() {
 		runtime.EventsEmit(tm.ctx, "show-settings")
+	})
+
+	// 导出Json
+	mOut.Click(func() {
+		tm.action.ExportJson(tm.app.GetContent(), tm.ctx)
 	})
 
 	// 如果需要设置托盘左键点击（显示窗口）

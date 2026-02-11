@@ -1,11 +1,15 @@
 package internal
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 
 	"github.com/tailscale/win"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 var (
@@ -251,4 +255,38 @@ func (a *Action) SetTransparency(alpha uint8) {
 		uintptr(alpha),
 		LWA_ALPHA,
 	)
+}
+
+func (a *Action) ExportJson(content []any, ctx context.Context) {
+	byteData, err := json.Marshal(content)
+	if err != nil || byteData == nil {
+		return
+	}
+
+	filePath, err := runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
+		Title:            "导出密码文件(明文)",
+		DefaultFilename:  "resource.json",
+		DefaultDirectory: "",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "JSON文件 (*.json)",
+				Pattern:     "*.json",
+			},
+		},
+	})
+
+	if err != nil {
+		return
+	}
+
+	if filePath == "" {
+		return
+	}
+
+	// 写入文件
+	err = os.WriteFile(filePath, byteData, 0644)
+	if err != nil {
+		return
+	}
+
 }
