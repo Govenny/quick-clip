@@ -7,10 +7,26 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/tailscale/win"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// 增加必要的结构体
+type POINT struct {
+	X, Y int32
+}
+
+type RECT struct {
+	Left, Top, Right, Bottom int32
+}
+type MONITORINFO struct {
+	Size    uint32
+	Monitor RECT
+	Work    RECT
+	Flags   uint32
+}
 
 var (
 	user32                         = syscall.NewLazyDLL("user32.dll")
@@ -18,21 +34,26 @@ var (
 	procGetWindowThreadProcessId   = user32.NewProc("GetWindowThreadProcessId")
 	procEnumWindows                = user32.NewProc("EnumWindows")
 	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
+	procGetCursorPos               = user32.NewProc("GetCursorPos")
+	procMonitorFromPoint           = user32.NewProc("MonitorFromPoint")
+	procGetMonitorInfoW            = user32.NewProc("GetMonitorInfoW")
+	procGetAncestor                = user32.NewProc("GetAncestor")
 )
 
 const (
-	SWP_NOSIZE       = 0x0001
-	SWP_NOMOVE       = 0x0002
-	SWP_NOACTIVATE   = 0x0010
-	SWP_SHOWWINDOW   = 0x0040
-	HWND_TOPMOST     = win.HWND(^uintptr(0)) // -1
-	WS_EX_NOACTIVATE = 0x08000000
-	GWL_EXSTYLE      = -20
-	SWP_HIDEWINDOW   = 0x0080
-	GA_ROOT          = 2
-	WS_EX_TOOLWINDOW = 0x00000080 // 设为工具窗口，不显示在任务栏，且减少对焦点的干扰
-	LWA_ALPHA        = 0x00000002
-	WS_EX_LAYERED    = 0x00080000
+	SWP_NOSIZE               = 0x0001
+	SWP_NOMOVE               = 0x0002
+	SWP_NOACTIVATE           = 0x0010
+	SWP_SHOWWINDOW           = 0x0040
+	HWND_TOPMOST             = win.HWND(^uintptr(0)) // -1
+	WS_EX_NOACTIVATE         = 0x08000000
+	GWL_EXSTYLE              = -20
+	SWP_HIDEWINDOW           = 0x0080
+	GA_ROOT                  = 2
+	WS_EX_TOOLWINDOW         = 0x00000080 // 设为工具窗口，不显示在任务栏，且减少对焦点的干扰
+	LWA_ALPHA                = 0x00000002
+	WS_EX_LAYERED            = 0x00080000
+	MONITOR_DEFAULTTONEAREST = 0x00000002
 )
 
 type Action struct {
@@ -96,24 +117,48 @@ func (a *Action) ShowNoActivate() {
 		return
 	}
 
-	// 1. 确保样式包含 NOACTIVATE 和 TOOLWINDOW
-	exStyle := win.GetWindowLong(a.selfHwnd, GWL_EXSTYLE)
-	win.SetWindowLong(a.selfHwnd, GWL_EXSTYLE, exStyle|WS_EX_TOOLWINDOW)
+	// 1. 获取鼠标坐标
+	var pt POINT
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 
-	win.ShowWindow(a.selfHwnd, win.SW_SHOW)
+	// 2. 【核心修复】打包 POINT 结构体为一个 uintptr
+	// 在 64 位系统下，POINT (X, Y) 各占 32 位，正好填满一个 64 位的 uintptr
+	// 低 32 位存 X, 高 32 位存 Y
+	packedPt := uintptr(uint32(pt.X)) | uintptr(uint32(pt.Y))<<32
 
-	// 2. 使用 SetWindowPos 显示
+	// MONITOR_DEFAULTTONEAREST = 2
+	hMonitor, _, _ := procMonitorFromPoint.Call(packedPt, 2)
+
+	// 3. 获取显示器信息
+	var mi MONITORINFO
+	mi.Size = uint32(unsafe.Sizeof(mi))
+	procGetMonitorInfoW.Call(hMonitor, uintptr(unsafe.Pointer(&mi)))
+
+	// 4. 获取窗口大小
+	var rect win.RECT
+	win.GetWindowRect(a.selfHwnd, &rect)
+	appW := rect.Right - rect.Left
+	appH := rect.Bottom - rect.Top
+
+	// 5. 计算坐标 (mi.Work.Left/Top 是多屏坐标的关键偏移)
+	monW := mi.Work.Right - mi.Work.Left
+	monH := mi.Work.Bottom - mi.Work.Top
+
+	x := mi.Work.Left + (monW-appW)/2
+	y := mi.Work.Top + (monH-appH)/2
+
+	// 6. 移动并显示
+	// 确保移除 SWP_NOMOVE
 	win.SetWindowPos(
 		a.selfHwnd,
-		HWND_TOPMOST,
-		0, 0, 0, 0,
-		SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW,
+		win.HWND_TOPMOST,
+		x, y, 0, 0,
+		win.SWP_NOSIZE|win.SWP_SHOWWINDOW|win.SWP_NOACTIVATE,
 	)
+
+	win.ShowWindow(a.selfHwnd, win.SW_SHOWNOACTIVATE)
 	win.SetForegroundWindow(a.selfHwnd)
 	win.SetFocus(a.selfHwnd)
-
-	// 3. 补偿显示
-	// win.ShowWindow(a.selfHwnd, 4) // SW_SHOWNOACTIVATE
 }
 
 // Hide 封装隐藏
