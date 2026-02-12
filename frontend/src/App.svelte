@@ -443,6 +443,55 @@
         return { parentArr: currentArr, targetIndex: index, oldKey: keyName };
     }
 
+    // -----------------------------------搜索
+    // --- 新增搜索相关变量 ---
+    import { PasteAndHide } from '../wailsjs/go/main/App'; // 确保导入此函数
+    let searchQuery = "";
+    let searchResults = [];
+
+    // 递归搜索函数：从嵌套数据中提取所有匹配项
+    function performSearch(items, query, path = "") {
+        if (!query.trim()) return [];
+        let results = [];
+        const q = query.toLowerCase();
+
+        for (const item of items) {
+            for (const [key, val] of Object.entries(item)) {
+                if (Array.isArray(val)) {
+                    // 如果是文件夹，递归搜索，并记录路径
+                    results = [...results, ...performSearch(val, query, path + key + " > ")];
+                } else {
+                    // 如果是文本项，匹配 Key
+                    if (key.toLowerCase().includes(q)) {
+                        results.push({
+                            name: key,
+                            content: val,
+                            fullPath: path + key
+                        });
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    // 响应式搜索：当 searchQuery 变化时自动更新结果
+    $: {
+        if (searchQuery.trim()) {
+            searchResults = performSearch(data, searchQuery);
+        } else {
+            searchResults = [];
+        }
+    }
+
+    // 搜索项点击处理：执行复制、粘贴隐藏并清空搜索
+    function handleSearchResultClick(content) {
+        navigator.clipboard.writeText(content).then(() => {
+            PasteAndHide();
+            searchQuery = ""; // 点击后重置搜索
+        }).catch(err => console.error("Search copy failed:", err));
+    }
+
 </script>
 
 
@@ -465,7 +514,13 @@
             Clip</span>
             
             <div class="search-wrapper">
-                <input type="search" class="search-input" placeholder="Search...">
+                <!-- 绑定 value 并添加清空按钮（可选） -->
+                <input 
+                    type="search" 
+                    class="search-input" 
+                    placeholder="Search keys..." 
+                    bind:value={searchQuery}
+                >
             </div>
 
             <div class="action-wrapper">
@@ -487,23 +542,45 @@
     
     <!-- 内容区域 -->
     <div class="content-scrollable">
-        {#if data.length === 0}
-            <div class="empty-state">No Items</div>
+        {#if searchQuery.trim()}
+            <div class="search-results-overlay">
+                {#if searchResults.length > 0}
+                    {#each searchResults as result}
+                        <div class="search-result-item" 
+                        on:click={() => handleSearchResultClick(result.content)}
+                        on:keydown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearchResultClick(result.content);
+                            }
+                        }}
+                        >
+                            <div class="result-path">{result.fullPath}</div>
+                            <div class="result-name">{result.name}</div>
+                        </div>
+                    {/each}
+                {:else}
+                    <div class="no-results">No matches found</div>
+                {/if}
+            </div>
         {:else}
-            <ul class="tree-root">
-                {#each data as item, index (index)}
-                    <TreeItem 
-                        itemKey={index.toString()} 
-                        value={item} 
-                        {data} 
-                        {updateData} 
-                        {expanded} 
-                        {toggleExpand} 
-                        index={index} 
-                        showContextMenu={showContextMenu}
-                    />
-                {/each}
-            </ul>
+            {#if data.length === 0}
+                <div class="empty-state">No Items</div>
+            {:else}
+                <ul class="tree-root">
+                    {#each data as item, index (index)}
+                        <TreeItem 
+                            itemKey={index.toString()} 
+                            value={item} 
+                            {data} 
+                            {updateData} 
+                            {expanded} 
+                            {toggleExpand} 
+                            index={index} 
+                            showContextMenu={showContextMenu}
+                        />
+                    {/each}
+                </ul>
+            {/if}
         {/if}
     </div>
 </div>
@@ -863,6 +940,43 @@
     .hint {
         font-size: 11px;
         color: #999;
+    }
+
+    /* 搜索结果样式 */
+    .search-results-overlay {
+        background: #fff;
+        min-height: 100%;
+        padding-top: 5px;
+    }
+
+    .search-result-item {
+        padding: 8px 15px;
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+
+    .search-result-item:hover {
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .result-path {
+        font-size: 10px;
+        color: #999;
+        margin-bottom: 2px;
+    }
+
+    .result-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .no-results {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+        font-size: 13px;
     }
 
 </style>
