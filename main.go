@@ -51,7 +51,6 @@ func main() {
 			// 如果你有 App 的 startup 逻辑，先执行
 			app.startup(ctx)
 			trayMgr.Run(ctx)
-
 		},
 		OnShutdown: app.shutdown,
 		Bind: []interface{}{

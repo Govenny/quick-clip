@@ -28,6 +28,10 @@
     let textName = "";
     let textInputRef;
 
+    // 删除确认弹窗
+    let showDeleteConfirm = false;
+    let itemToDelete = null;
+
     // 在父组件中（例如 App.svelte）
     let globalContextMenu = {
         visible: false,
@@ -81,9 +85,24 @@
     function deleteItem() {
 		if (!globalContextMenu.targetKey) return;
 
+		// 保存要删除的项目信息
+		itemToDelete = {
+			key: globalContextMenu.targetKey,
+			isFolder: globalContextMenu.isFolder
+		};
+
+		// 显示确认弹窗
+		showDeleteConfirm = true;
+		// 隐藏右键菜单
+		hideContextMenu();
+	}
+
+	function confirmDeleteItem() {
+		if (!itemToDelete) return;
+
 		try {
 			// 获取父级路径
-			const keys = globalContextMenu.targetKey.split(".");
+			const keys = itemToDelete.key.split(".");
 			const propertyToDelete = keys.pop(); // 要删除的属性名
 			const parentPath = keys.join(".");
 
@@ -109,12 +128,17 @@
 				}
 			}
 
-			// 隐藏菜单
-			hideContextMenu();
-            cleanGlobalContextMenu();
+			// 隐藏弹窗
+			cancelDelete();
 		} catch (err) {
 			console.error("删除失败", err);
 		}
+	}
+
+	function cancelDelete() {
+		showDeleteConfirm = false;
+		itemToDelete = null;
+		cleanGlobalContextMenu();
 	}
 
 
@@ -658,6 +682,26 @@
     />
 {/if}
 
+<!-- 删除确认弹窗 -->
+{#if showDeleteConfirm}
+    <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} transition:fade={{duration: 80}}>
+        <div class="modal-box compact confirm-modal" on:keydown|stopPropagation on:click|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+            <div class="confirm-content">
+                <div class="confirm-text">
+                    <div class="confirm-title">Confirm Delete</div>
+                    <div class="confirm-message">
+                        Are you sure?
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer confirm-footer">
+                <button class="btn btn-cancel" on:click={cancelDelete}>Cancel</button>
+                <button class="btn btn-delete" on:click={confirmDeleteItem}>Delete</button>
+            </div>
+        </div>
+    </div>
+{/if}
+
 <style>
     /* 主容器 */
     .app-container {
@@ -935,6 +979,80 @@
         padding: 6px 10px;
         text-align: right;
         border-top: 1px solid #f0f0f0;
+    }
+
+    .confirm-modal {
+        min-width: 25px;
+        padding: 5px;
+    }
+
+    .confirm-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .confirm-icon {
+        font-size: 32px;
+        flex-shrink: 0;
+    }
+
+    .confirm-text {
+        flex: 1;
+    }
+
+    .confirm-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .confirm-message {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.5;
+    }
+
+    .confirm-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 0;
+        background: transparent;
+        border-top: none;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+
+    .btn-cancel {
+        background: #f5f5f5;
+        color: #666;
+        border-color: #ddd;
+    }
+
+    .btn-cancel:hover {
+        background: #e5e5e5;
+        color: #333;
+    }
+
+    .btn-delete {
+        background: #fee2e2;
+        color: #dc2626;
+        border-color: #fecaca;
+    }
+
+    .btn-delete:hover {
+        background: #fecaca;
+        color: #b91c1c;
     }
 
     .hint {
