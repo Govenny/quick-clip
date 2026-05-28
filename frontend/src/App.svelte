@@ -1,16 +1,22 @@
 <script>
     import { onMount, tick, onDestroy } from 'svelte';
-    import { fade, fly} from 'svelte/transition';
+    import { fade, fly } from 'svelte/transition';
+    import { quartOut, cubicOut, backOut } from 'svelte/easing';
     import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow} from '../wailsjs/go/main/App'; 
     import { LogInfo, Quit, EventsOn   } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
     import Setting from './components/Setting.svelte';
-
+    // 强弹性 (0.34, 1.56, 0.64, 1) — 主要点击交互（按钮、菜单项、开关）
+    // 中弹性 (0.34, 1.3, 0.64, 1) — 功能性元素（搜索框、结果列表）
+    // 弱弹性 (0.34, 1.15, 0.64, 1) — 辅助性过渡（边框、阴影变化）
     let data = [];
     let expanded = {};
     let showMenu = false;
     let isHovered = false;
     let showSettings = false;
+
+    // 粘贴模式开关: true=Auto Paste, false=Not Paste
+    let autoPaste = true;
 
     // 编辑模式
     let isEditMode = false; // 标记当前是编辑还是新增
@@ -411,25 +417,13 @@
         lastFocusTime = Date.now();
     }
 
-    // function handleBlur() {
-    //     const now = Date.now();
-    //     if (now - lastFocusTime < 200) {
-    //         return;
-    //     }else{
-    //         ToggleWindow();
-    //     }
-    // }
     function handleBlur() {
-        // 强制等待一帧，让 document.activeElement 更新
         requestAnimationFrame(() => {
-            // 如果窗口依然拥有焦点，或者焦点移到了窗口内的某个元素
             if (document.hasFocus()) {
                 return;
             }
 
-            // 如果弹窗（Modal）正在显示，用户可能在操作弹窗，特殊处理
             if (showTextInput || showDirInput || showSettings) {
-                // 这里可以根据需求决定：弹窗开启时，点外部是否隐藏全应用
                 return; 
             }
 
@@ -445,17 +439,12 @@
 
     function getParentArrayAndIndex(pathStr) {
         const parts = pathStr.split('.');
-        // parts = ["0", "FolderA", "1", "FolderB"]
-        
-        // 弹出最后两项：Key名 和 Index
-        const keyName = parts.pop(); // "FolderB"
-        const indexStr = parts.pop(); // "1"
+        const keyName = parts.pop();
+        const indexStr = parts.pop();
         const index = parseInt(indexStr);
 
-        // 剩下的 parts 就是通往父级数组的路径 ["0", "FolderA"]
         let currentArr = data;
         
-        // 如果还有剩余路径，说明不是根目录
         if (parts.length > 0) {
             for (let i = 0; i < parts.length; i += 2) {
                 const pIndex = parseInt(parts[i]);
@@ -467,13 +456,10 @@
         return { parentArr: currentArr, targetIndex: index, oldKey: keyName };
     }
 
-    // -----------------------------------搜索
-    // --- 新增搜索相关变量 ---
-    import { PasteAndHide } from '../wailsjs/go/main/App'; // 确保导入此函数
+    import { PasteAndHide } from '../wailsjs/go/main/App';
     let searchQuery = "";
     let searchResults = [];
 
-    // 递归搜索函数：从嵌套数据中提取所有匹配项
     function performSearch(items, query, path = "") {
         if (!query.trim()) return [];
         let results = [];
@@ -482,10 +468,8 @@
         for (const item of items) {
             for (const [key, val] of Object.entries(item)) {
                 if (Array.isArray(val)) {
-                    // 如果是文件夹，递归搜索，并记录路径
                     results = [...results, ...performSearch(val, query, path + key + " > ")];
                 } else {
-                    // 如果是文本项，匹配 Key
                     if (key.toLowerCase().includes(q)) {
                         results.push({
                             name: key,
@@ -499,7 +483,6 @@
         return results;
     }
 
-    // 响应式搜索：当 searchQuery 变化时自动更新结果
     $: {
         if (searchQuery.trim()) {
             searchResults = performSearch(data, searchQuery);
@@ -508,37 +491,34 @@
         }
     }
 
-    // 搜索项点击处理：执行复制、粘贴隐藏并清空搜索
     function handleSearchResultClick(content) {
         navigator.clipboard.writeText(content).then(() => {
             PasteAndHide();
-            searchQuery = ""; // 点击后重置搜索
+            searchQuery = "";
         }).catch(err => console.error("Search copy failed:", err));
     }
 
 </script>
-
 
 <svelte:window 
     on:blur={() => handleBlur()} 
     on:focus={() => handleFocus()}
 />
 
-<!-- 整体容器 -->
 <div class="app-container">
     
-    <!-- 极简头部：类似于 VS Code 或 Mac Spotlight -->
     <div class="sticky-header">
         <div class="header-row">
-            <span class="app-title" on:click={() => Quit()} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                    Quit();
-                }
-            }}>Quick
-            Clip</span>
+                        <button class="paste-toggle" class:active={autoPaste} on:click={() => { autoPaste = !autoPaste; }} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoPaste = !autoPaste; } }}>
+                            <span class="toggle-text">
+                                <span class="toggle-label">{autoPaste ? 'Auto Paste' : 'Not Paste'}</span>
+                            </span>
+                            <span class="toggle-indicator">
+                                <span class="toggle-dot"></span>
+                            </span>
+                        </button>
             
             <div class="search-wrapper">
-                <!-- 绑定 value 并添加清空按钮（可选） -->
                 <input 
                     type="search" 
                     class="search-input" 
@@ -555,7 +535,7 @@
                     </svg>
                 </button>
                 {#if showMenu}
-                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation transition:fade={{duration: 100}}>
+                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation in:fly={{ y: -4, duration: 130, easing: backOut }} out:fade={{duration: 80}}>
                         <button on:click={addText}>文本 (Text)</button>
                         <button on:click={addDir}>文件夹 (Folder)</button>
                     </div>
@@ -564,7 +544,6 @@
         </div>
     </div>
     
-    <!-- 内容区域 -->
     <div class="content-scrollable">
         {#if searchQuery.trim()}
             <div class="search-results-overlay">
@@ -609,46 +588,29 @@
     </div>
 </div>
 
-<!-- 上下文菜单 -->
 {#if globalContextMenu.visible}
   <div 
     class="context-menu"
     style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px;"
     on:contextmenu|preventDefault>
     {#if globalContextMenu.isFolder}
-        <div class="menu-item" on:click={addText} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                }
-            }}>New Text</div>
-        <div class="menu-item" on:click={addDir} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                }
-            }}>New Folder</div>
+        <div class="menu-item" on:click={addText} on:keydown={(e => {e.key === 'Enter' && addText()})}>New Text</div>
+        <div class="menu-item" on:click={addDir} on:keydown={(e => {e.key === 'Enter' && addDir()})}>New Folder</div>
         <div class="menu-divider"></div>
-        <div class="menu-item" on:click={editDir} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                }
-            }}>Edit</div>
+        <div class="menu-item" on:click={editDir} on:keydown={(e => {e.key === 'Enter' && editDir()})}>Edit</div>
         <div class="menu-divider"></div>
     {/if}
     {#if !globalContextMenu.isFolder}
-        <div class="menu-item" on:click={editText} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                }
-            }}>Edit</div>
+        <div class="menu-item" on:click={editText} on:keydown={(e => {})}>Edit</div>
         <div class="menu-divider"></div>
     {/if}
-    <div class="menu-item delete" on:click={deleteItem} on:keyup={(e) => {
-                if (e.key === 'Enter') {
-                }
-            }}>Delete</div>
+    <div class="menu-item delete" on:click={deleteItem} on:keydown={(e => {})}>Delete</div>
   </div>
 {/if}
 
-<!-- 目录弹窗 -->
 {#if showDirInput}
-    <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} transition:fade={{duration: 80}}>
-        <div class="modal-box compact" on:keyup|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+        <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+        <div class="modal-box compact" on:keyup|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <input type="text" bind:value={dirName} bind:this={dirInputRef} placeholder="Folder Name" 
                 on:click={(e) => e.stopPropagation()}
                 on:keydown={(e) => { if (e.key === 'Enter') confirmAddDir(); if (e.key === 'Escape') cancelAddDir(); }}/>
@@ -656,10 +618,9 @@
     </div>
 {/if}
 
-<!-- 文本弹窗 -->
 {#if showTextInput}
-    <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} transition:fade={{duration: 80}}>
-        <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+        <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+        <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <div class="input-group">
                 <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
                 <input type="text" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
@@ -682,10 +643,9 @@
     />
 {/if}
 
-<!-- 删除确认弹窗 -->
 {#if showDeleteConfirm}
-    <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} transition:fade={{duration: 80}}>
-        <div class="modal-box compact confirm-modal" on:keydown|stopPropagation on:click|stopPropagation transition:fly={{ y: -10, duration: 150 }}>
+        <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+        <div class="modal-box compact confirm-modal" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <div class="confirm-content">
                 <div class="confirm-text">
                     <div class="confirm-title">Confirm Delete</div>
@@ -703,20 +663,18 @@
 {/if}
 
 <style>
-    /* 主容器 */
     .app-container {
-        width: 100vw; /* 占满窗口 */
+        width: 100vw;
         height: 100vh;
-        background: rgba(255, 255, 255, 0.92); /* 略微不透明一点，提高阅读性 */
+        background: rgba(255, 255, 255, 0.92);
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
 
-    /* --- 头部样式：极致紧凑 --- */
     .sticky-header {
         flex-shrink: 0;
-        background: rgba(245, 245, 245, 0.85); /* 浅灰色背景区分头部 */
+        background: rgba(245, 245, 245, 0.85);
         backdrop-filter: blur(20px);
         border-bottom: 1px solid rgba(0,0,0,0.08);
         padding: 8px 10px 3px;
@@ -727,17 +685,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        height: 28px; /* 强制高度 */
-    }
-
-    .app-title {
-        font-weight: 600;
-        font-size: 13px;
-        color: #444;
-        white-space: nowrap;
-        cursor: default;
-        user-select: none;
-        margin-right: 4px;
+        height: 28px;
     }
 
     .search-wrapper {
@@ -746,19 +694,19 @@
     }
 
     .search-input {
-        width: 100%;
-        height: 26px;
-        border: 1px solid rgba(0,0,0,0.1);
-        background: #fff;
-        border-radius: 4px;
-        padding: 0 8px;
-        font-size: 13px;
-        outline: none;
-        transition: all 0.2s;
-    }
+            width: 100%;
+            height: 26px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: #fff;
+            border-radius: 4px;
+            padding: 0 8px;
+            font-size: 13px;
+            outline: none;
+            transition: all 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+        }
 
     .search-input:focus {
-        border-color: #3b82f6; /* 聚焦蓝 */
+        border-color: #3b82f6;
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
     }
 
@@ -777,20 +725,108 @@
         justify-content: center;
         color: #555;
         cursor: pointer;
-        transition: background 0.1s;
+        transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
         padding: 0;
     }
 
     .icon-btn:hover {
         background: rgba(0,0,0,0.06);
         color: #000;
+        transform: scale(1.08);
     }
 
     .icon-btn svg {
         opacity: 0.8;
     }
 
-    /* 下拉菜单 */
+    /* --- 粘贴模式切换开关 (iOS 弹性收缩展开) --- */
+    .paste-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px 2px 4px;
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 20px;
+        background: rgba(255,255,255,0.5);
+        cursor: pointer;
+        user-select: none;
+        outline: none;
+        font-family: inherit;
+        font-size: 13px;
+        white-space: nowrap;
+        margin-right: 4px;
+        flex-shrink: 0;
+        transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        overflow: hidden;
+    }
+
+    .paste-toggle:hover {
+        gap: 8px;
+        padding: 2px 8px 2px 10px;
+        background: rgba(255,255,255,0.85);
+        border-color: rgba(0,0,0,0.12);
+    }
+
+    .paste-toggle:focus-visible {
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    .toggle-text {
+        overflow: hidden;
+        max-width: 20px;
+        transition: max-width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .paste-toggle:hover .toggle-text {
+        max-width: 100px;
+    }
+
+    .toggle-label {
+        display: inline-block;
+        font-weight: 500;
+        font-size: 12px;
+        color: #666;
+        white-space: nowrap;
+                transition: color 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    .paste-toggle.active .toggle-label {
+        color: #2563eb;
+    }
+
+    .toggle-indicator {
+        position: relative;
+        width: 28px;
+        height: 14px;
+        background: #d1d5db;
+        border-radius: 14px;
+        transition: background 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        flex-shrink: 0;
+    }
+
+    .paste-toggle.active .toggle-indicator {
+        background: #93c5fd;
+    }
+
+    .toggle-dot {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 10px;
+        height: 10px;
+        background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+        transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .paste-toggle.active .toggle-dot {
+        transform: translateX(14px);
+        background: #3b82f6;
+        box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+    }
+
     .dropdown-menu {
         position: absolute;
         top: 30px;
@@ -815,6 +851,7 @@
         color: #333;
         border-radius: 4px;
         cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .dropdown-menu button:hover {
@@ -822,11 +859,10 @@
         color: white;
     }
 
-    /* --- 列表区域 --- */
     .content-scrollable {
         flex: 1;
         overflow-y: auto;
-        padding: 4px 0; /* 极小内边距 */
+        padding: 4px 0;
     }
 
     .empty-state {
@@ -842,15 +878,11 @@
         margin: 0;
     }
 
-    /* 
-       重要：这里使用了 :global 来强制覆盖 TreeItem 内部可能的样式 
-       目标是让列表看起来像 VS Code 的侧边栏，而不是卡片
-    */
     :global(.tree-root ul) {
         list-style: none;
-        padding-left: 16px; /* 缩进 */
+        padding-left: 16px;
         margin: 0;
-        border-left: 1px solid rgba(0,0,0,0.05); /* 淡淡的引导线 */
+        border-left: 1px solid rgba(0,0,0,0.05);
     }
 
     :global(.tree-root li) {
@@ -858,11 +890,10 @@
         padding: 0;
     }
 
-    /* 模拟 TreeItem 内容行的样式 (你需要确保 TreeItem 内部结构能匹配或调整) */
     :global(.tree-item-content) {
         display: flex;
         align-items: center;
-        padding: 4px 8px; /* 紧凑行高 */
+        padding: 4px 8px;
         cursor: pointer;
         border-radius: 4px;
         margin: 1px 4px;
@@ -873,13 +904,11 @@
         background-color: rgba(0,0,0,0.04);
     }
     
-    /* 选中的样式 (如果有) */
     :global(.tree-item-content.selected) {
         background-color: #e0e7ff;
         color: #3730a3;
     }
 
-    /* --- 上下文菜单 (Native Look) --- */
     .context-menu {
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(10px);
@@ -892,13 +921,14 @@
     }
 
     .menu-item {
-        padding: 4px 10px;
-        font-size: 13px;
-        border-radius: 4px;
-        cursor: pointer;
-        color: #333;
-        text-align: left;   
-    }
+            padding: 4px 10px;
+            font-size: 13px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #333;
+            text-align: left;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
 
     .menu-item:hover {
         background: #3b82f6;
@@ -906,7 +936,7 @@
     }
 
     .menu-item.delete:hover {
-        background: #ef4444; /* 红色警告 */
+        background: #ef4444;
     }
     
     .menu-divider {
@@ -915,14 +945,13 @@
         margin: 4px 0;
     }
 
-    /* --- 弹窗 (Spotlight 风格) --- */
     .modal-overlay {
         position: fixed;
         top: 0;left: 0;right: 0;bottom: 0;
-        background: rgba(255,255,255,0.5); /* 非常淡的遮罩 */
+        background: rgba(255,255,255,0.5);
         z-index: 2000;
         display: flex;
-        align-items: flex-start; /* 靠上显示 */
+        align-items: flex-start;
         justify-content: center;
         padding-top: 80px;
         z-index: 9998;
@@ -949,13 +978,14 @@
         flex-direction: column;
     }
 
-    .input-group input {
+        .input-group input {
         border: none;
         padding: 12px 16px;
         font-size: 14px;
         outline: none;
         width: 100%;
         background: transparent;
+        transition: background 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
     }
 
     .title-input {
@@ -993,11 +1023,6 @@
         margin-bottom: 20px;
     }
 
-    .confirm-icon {
-        font-size: 32px;
-        flex-shrink: 0;
-    }
-
     .confirm-text {
         flex: 1;
     }
@@ -1030,7 +1055,7 @@
         font-size: 13px;
         cursor: pointer;
         border: 1px solid transparent;
-        transition: all 0.2s;
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .btn-cancel {
@@ -1060,7 +1085,6 @@
         color: #999;
     }
 
-    /* 搜索结果样式 */
     .search-results-overlay {
         background: #fff;
         min-height: 100%;
@@ -1068,14 +1092,15 @@
     }
 
     .search-result-item {
-        padding: 8px 15px;
-        border-bottom: 1px solid rgba(0,0,0,0.03);
-        cursor: pointer;
-        transition: background 0.1s;
-    }
+            padding: 8px 15px;
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+        }
 
     .search-result-item:hover {
         background: rgba(59, 130, 246, 0.1);
+        padding-left: 20px;
     }
 
     .result-path {

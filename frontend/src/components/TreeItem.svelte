@@ -1,5 +1,6 @@
 <script>
 	import { slide } from "svelte/transition";
+	import { quartOut } from 'svelte/easing';
 	import { PasteAndHide } from "../../wailsjs/go/main/App";
 	import catalogExpandImage from '/src/assets/images/catalog-expand.png';
 	import catalogImage from '/src/assets/images/catalog.png';
@@ -241,7 +242,7 @@
 			{#if expanded[itemKey + "." + key]}
 				<ul
 					class="nested-list"
-					transition:slide={{ duration: 200 }}
+					transition:slide={{ duration: 280, easing: quartOut }}
 				>
 					{#each val as subItem, subIndex (subIndex)}
 						<svelte:self
@@ -316,19 +317,21 @@
         font-size: 13px;
         color: #333;
         text-align: left;
-        transition: background-color 0.1s ease;
+                transition: background-color 0.2s cubic-bezier(0.34, 1.3, 0.64, 1);
     }
 
-	/* 拖拽时的半透明 */
+		/* 拖拽时的半透明 */
 	.dragging {
 		opacity: 0.4;
         background: #f5f5f5;
+        transition: opacity 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), background-color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
 	}
 
-	/* 移入文件夹高亮 */
+		/* 移入文件夹高亮 */
 	.folder-btn.drop-inside {
 		background-color: rgba(59, 130, 246, 0.2) !important;
         color: #000;
+        transition: background-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
 	}
 
 	/* 排序指示线：上方 */
@@ -372,9 +375,9 @@
 	.label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px; }
 	.item-key { color: #333; margin-right: 6px; font-weight: 500; }
 	.nested-list { margin-left: 10px; padding-left: 10px; border-left: 1px solid rgba(0, 0, 0, 0.08); list-style: none; }
-	.drag-handle { margin-left: auto; color: transparent; cursor: grab; font-size: 12px; }
+	.drag-handle { margin-left: auto; color: transparent; cursor: grab; font-size: 12px; transition: color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1); }
 	.folder-btn:hover .drag-handle, .item-line:hover .drag-handle { color: #bbb; }
 	.drag-handle:hover { color: #666 !important; }
-	.copied-indicator { margin-left: auto; padding-left: 8px; color: #10b981; font-size: 11px; animation: fadeIn 0.2s ease; }
-	@keyframes fadeIn { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
+		.copied-indicator { margin-left: auto; padding-left: 8px; color: #10b981; font-size: 11px; animation: fadeIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1); }
+	@keyframes fadeIn { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
 </style>
