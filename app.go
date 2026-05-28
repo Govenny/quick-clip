@@ -147,6 +147,13 @@ func (a *App) PasteAndHide() {
 	go a.action.SendPaste()
 }
 
+// HideAndRestore 只隐藏+恢复焦点，不执行粘贴
+func (a *App) HideAndRestore() {
+	a.isVisible = false
+	a.action.Hide()
+	a.action.RestoreFocus(a.lastHwnd)
+}
+
 // 进入设置模式：变大
 func (a *App) EnterSettingsMode() {
 	a.action.SetSizeNative(600, 450)

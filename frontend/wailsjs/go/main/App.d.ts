@@ -14,6 +14,8 @@ export function GetDataPath():Promise<string>;
 
 export function GetKeys():Promise<string>;
 
+export function HideAndRestore():Promise<void>;
+
 export function HideWindow():Promise<void>;
 
 export function PasteAndHide():Promise<void>;

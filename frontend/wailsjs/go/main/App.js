@@ -26,6 +26,10 @@ export function GetKeys() {
   return window['go']['main']['App']['GetKeys']();
 }
 
+export function HideAndRestore() {
+  return window['go']['main']['App']['HideAndRestore']();
+}
+
 export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
 }

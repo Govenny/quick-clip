@@ -1,7 +1,7 @@
 <script>
 	import { slide } from "svelte/transition";
 	import { quartOut } from 'svelte/easing';
-	import { PasteAndHide } from "../../wailsjs/go/main/App";
+	import { PasteAndHide, HideAndRestore } from "../../wailsjs/go/main/App";
 	import catalogExpandImage from '/src/assets/images/catalog-expand.png';
 	import catalogImage from '/src/assets/images/catalog.png';
 	// import { LogInfo } from "../../wailsjs/runtime/runtime"; // 暂时注释，防报错
@@ -13,7 +13,8 @@
 	export let updateData; 
 	export let expanded;
 	export let toggleExpand;
-	export let index; 
+		export let index; 
+	export let autoPaste = true;
 
 	let copied = false;
 	let dragOverIndex = null; // 这里存储的是 index，用来高亮当前组件
@@ -27,13 +28,17 @@
         dropType = null;
     }
 
-	function copyToClipboard(text) {
+		function copyToClipboard(text) {
 		const content = typeof text === "string" ? text : JSON.stringify(text);
 		navigator.clipboard.writeText(content).then(() => {
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		}).catch((err) => console.error("Failed to copy: ", err));
-		PasteAndHide();
+		if (autoPaste) {
+			PasteAndHide();
+		} else {
+			HideAndRestore();
+		}
 	}
 
 	function handleKeyCopy(e, text) {
@@ -245,7 +250,7 @@
 					transition:slide={{ duration: 280, easing: quartOut }}
 				>
 					{#each val as subItem, subIndex (subIndex)}
-						<svelte:self
+												<svelte:self
 							itemKey={itemKey + "." + key + "." + subIndex}
 							value={subItem}
 							{data}
@@ -254,6 +259,7 @@
 							{toggleExpand}
 							index={subIndex}
 							showContextMenu={showContextMenu}
+							{autoPaste}
 						/>
 					{/each}
 				</ul>

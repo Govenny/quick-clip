@@ -1,7 +1,20 @@
 <script>
     import { onMount, tick, onDestroy } from 'svelte';
-    import { fade, fly } from 'svelte/transition';
-    import { quartOut, cubicOut, backOut } from 'svelte/easing';
+    import { fade, fly, scale } from 'svelte/transition';
+
+    // iOS 弹性缓动: cubic-bezier(0.34, 1.3, 0.64, 1)
+    function iosElastic(t) {
+        const p1x = 0.34, p1y = 1.3, p2x = 0.64, p2y = 1;
+        let u = t;
+        for (let i = 0; i < 8; i++) {
+            const b = 3*p1x*u*(1-u)*(1-u) + 3*p2x*u*u*(1-u) + u*u*u;
+            const db = 3*p1x*(1-u)*(1-u) - 6*p1x*u*(1-u) + 3*p2x*u*(2-3*u) + 3*u*u;
+            if (Math.abs(b - t) < 1e-5) break;
+            u -= (b - t) / db;
+        }
+        return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
+    }
+    import { quartOut, cubicOut } from 'svelte/easing';
     import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow} from '../wailsjs/go/main/App'; 
     import { LogInfo, Quit, EventsOn   } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
@@ -38,14 +51,16 @@
     let showDeleteConfirm = false;
     let itemToDelete = null;
 
-    // 在父组件中（例如 App.svelte）
+        // 在父组件中（例如 App.svelte）
     let globalContextMenu = {
         visible: false,
         x: 0,
         y: 0,
         targetKey: null,
         targetValue: null,
-        isFolder: false
+        isFolder: false,
+        flipX: false,
+        flipY: false
     };
 
     function cleanGlobalContextMenu() {
@@ -55,7 +70,9 @@
             y: 0,
             targetKey: null,
             targetValue: null,
-            isFolder: false
+            isFolder: false,
+            flipX: false,
+            flipY: false
         };
     }
 
@@ -63,13 +80,38 @@
         e.preventDefault();
         e.stopPropagation();
         
+                // 估算菜单尺寸
+        const menuWidth = 128;   // 页面宽度 256/2
+        const itemHeight = 28;   // 每个菜单项约 28px
+        const dividerHeight = 9; // 分割线约 9px
+        const padding = 8;       // 上下 padding 4px*2
+        
+        let itemCount, dividerCount;
+        if (isFolder) {
+            itemCount = 5;    // New Text + New Folder + Edit + (divider) + Delete
+            dividerCount = 3; // 两个 divider + 一个 divider 在 delete 前... 实际看模板是 3 个
+        } else {
+            itemCount = 2;    // Edit + Delete
+            dividerCount = 1;
+        }
+        const menuHeight = itemCount * itemHeight + dividerCount * dividerHeight + padding;
+        
+        // 检测窗口边界
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
+        
+        const flipX = e.pageX + menuWidth > winW;
+        const flipY = e.pageY + menuHeight > winH;
+        
         globalContextMenu = {
             visible: true,
-            x: e.pageX,
-            y: e.pageY,
+            x: flipX ? e.pageX - menuWidth : e.pageX,
+            y: flipY ? e.pageY - menuHeight : e.pageY,
             targetKey: key,
             targetValue: val,
-            isFolder: isFolder
+            isFolder: isFolder,
+            flipX,
+            flipY
         };
     }
 
@@ -456,7 +498,7 @@
         return { parentArr: currentArr, targetIndex: index, oldKey: keyName };
     }
 
-    import { PasteAndHide } from '../wailsjs/go/main/App';
+    import { PasteAndHide, HideAndRestore } from '../wailsjs/go/main/App';
     let searchQuery = "";
     let searchResults = [];
 
@@ -491,9 +533,13 @@
         }
     }
 
-    function handleSearchResultClick(content) {
+        function handleSearchResultClick(content) {
         navigator.clipboard.writeText(content).then(() => {
-            PasteAndHide();
+            if (autoPaste) {
+                PasteAndHide();
+            } else {
+                HideAndRestore();
+            }
             searchQuery = "";
         }).catch(err => console.error("Search copy failed:", err));
     }
@@ -535,7 +581,7 @@
                     </svg>
                 </button>
                 {#if showMenu}
-                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation in:fly={{ y: -4, duration: 130, easing: backOut }} out:fade={{duration: 80}}>
+                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation in:fly={{ y: -5, duration: 150, easing: iosElastic }} out:fade={{duration: 70}}>
                         <button on:click={addText}>文本 (Text)</button>
                         <button on:click={addDir}>文件夹 (Folder)</button>
                     </div>
@@ -571,7 +617,7 @@
             {:else}
                 <ul class="tree-root">
                     {#each data as item, index (index)}
-                        <TreeItem 
+                                                <TreeItem 
                             itemKey={index.toString()} 
                             value={item} 
                             {data} 
@@ -580,6 +626,7 @@
                             {toggleExpand} 
                             index={index} 
                             showContextMenu={showContextMenu}
+                            {autoPaste}
                         />
                     {/each}
                 </ul>
@@ -591,7 +638,8 @@
 {#if globalContextMenu.visible}
   <div 
     class="context-menu"
-    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px;"
+    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; transform-origin: {globalContextMenu.flipX ? 'right' : 'left'} {globalContextMenu.flipY ? 'bottom' : 'top'};"
+    in:scale={{ duration: 130, easing: iosElastic }} out:fade={{ duration: 60 }}
     on:contextmenu|preventDefault>
     {#if globalContextMenu.isFolder}
         <div class="menu-item" on:click={addText} on:keydown={(e => {e.key === 'Enter' && addText()})}>New Text</div>
@@ -909,14 +957,14 @@
         color: #3730a3;
     }
 
-    .context-menu {
+        .context-menu {
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(0,0,0,0.1);
         box-shadow: 0 6px 16px rgba(0,0,0,0.12);
         border-radius: 6px;
         padding: 4px;
-        min-width: 140px;
+        min-width: 128px;
         z-index: 9999;
     }
 
