@@ -10,9 +10,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"unsafe"
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+var (
+	contentWriteMu   sync.Mutex
+	kernel32         = syscall.NewLazyDLL("kernel32.dll")
+	procReplaceFileW = kernel32.NewProc("ReplaceFileW")
+)
+
+const replaceFileWriteThrough = 0x00000001
 
 // Encrypt encrypts plaintext using AES-256-CBC with a random IV.
 // The IV is prepended to the ciphertext and the whole is base64 encoded.
@@ -172,80 +184,175 @@ func DecryptBytes(ciphertext []byte, key string) ([]byte, error) {
 	return ciphertextBytes[:len(ciphertextBytes)-padding], nil
 }
 
-func ReadContent(path string, keys string) []any {
-	content, err := os.ReadFile(path)
-	// 情况 A: 文件不存在，初始化并返回空数据
-	if os.IsNotExist(err) {
-		initialData := []byte("[]")
-		// 将加密后的初始数据保存到磁盘，方便下次读取
-		SaveContentBytes(path, keys, initialData)
-		return []any{}
-	} else if err != nil {
-		fmt.Printf("读取文件失败: %v\n", err)
-		return nil
+func ReadContent(path string, keys string) ([]any, error) {
+	content, err := readContentFile(path, keys)
+	if err == nil {
+		return content, nil
 	}
 
-	// 情况 B: 文件存在，解密
-	decrypted, err := DecryptBytes(content, keys)
-	if err != nil {
-		fmt.Printf("解密失败 (可能是密钥不匹配或文件损坏): %v\n", err)
-		return nil
+	backupPath := path + ".bak"
+	backupContent, backupErr := readContentFile(backupPath, keys)
+	if backupErr == nil {
+		if restoreErr := restorePrimaryFromBackup(path, backupPath); restoreErr != nil {
+			fmt.Printf("主数据读取失败，已加载备份但未能重建主文件: %v\n", restoreErr)
+		} else {
+			fmt.Printf("主数据读取失败，已从备份恢复: %s\n", backupPath)
+		}
+		return backupContent, nil
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	var tContent []any
-	err = json.Unmarshal(decrypted, &tContent)
-	if err != nil {
-		fmt.Printf("JSON解析失败: %v\n", err)
-		return nil
+	if errors.Is(err, os.ErrNotExist) && errors.Is(backupErr, os.ErrNotExist) {
+		return []any{}, nil
 	}
-	return tContent
+
+	return nil, fmt.Errorf("unable to load primary data (%w) or backup (%v)", err, backupErr)
 }
 
-func ReadContenttoBytes(path string, keys string) []byte {
+func readContentFile(path string, keys string) ([]any, error) {
 	content, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		// 文件不存在，创建文件并写入初始数据
-		initialData := []byte("[]") // 空的JSON数组
-		resource, err := EncryptBytes(initialData, keys)
-		if err != nil {
-			fmt.Println(err)
-			return nil
-		}
-		err = os.WriteFile(path, resource, 0644)
-		if err != nil {
-			fmt.Println(err)
-			return nil
-		}
-		content = initialData // 使用刚创建的初始数据
-	} else if err != nil {
-		// 其他读取错误
-		fmt.Println(err)
-		return nil
+	if err != nil {
+		return nil, err
 	}
 
 	decrypted, err := DecryptBytes(content, keys)
 	if err != nil {
-		fmt.Println(err)
-		return nil
+		return nil, fmt.Errorf("decrypt %s: %w", path, err)
 	}
-	return decrypted
+
+	var jsonCodec = jsoniter.ConfigCompatibleWithStandardLibrary
+	var parsed []any
+	if err := jsonCodec.Unmarshal(decrypted, &parsed); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return parsed, nil
 }
 
-// 辅助函数：直接保存字节流
-func SaveContentBytes(path string, keys string, byteData []byte) {
+// SaveContentBytes encrypts a JSON payload and atomically replaces the primary file.
+// The previous valid primary file is retained as path + ".bak".
+func SaveContentBytes(path string, keys string, byteData []byte) error {
+	if !json.Valid(byteData) {
+		return errors.New("content is not valid JSON")
+	}
+
 	resource, err := EncryptBytes(byteData, keys)
 	if err != nil {
-		return
+		return fmt.Errorf("encrypt content: %w", err)
 	}
-	_ = os.WriteFile(path, resource, 0644)
+
+	contentWriteMu.Lock()
+	defer contentWriteMu.Unlock()
+
+	if err := writeEncryptedFile(path, resource, true); err != nil {
+		return fmt.Errorf("atomic save content: %w", err)
+	}
+	return nil
 }
 
-// 你的 SaveContent 也可以简化调用这个辅助函数
-func SaveContent(path string, keys string, content []any) {
+func SaveContent(path string, keys string, content []any) error {
 	byteData, err := json.Marshal(content)
-	if err != nil || byteData == nil {
-		return
+	if err != nil {
+		return fmt.Errorf("marshal content: %w", err)
 	}
-	SaveContentBytes(path, keys, byteData)
+	return SaveContentBytes(path, keys, byteData)
+}
+
+func restorePrimaryFromBackup(path string, backupPath string) error {
+	backup, err := os.ReadFile(backupPath)
+	if err != nil {
+		return fmt.Errorf("read backup: %w", err)
+	}
+
+	contentWriteMu.Lock()
+	defer contentWriteMu.Unlock()
+
+	// Keep the validated backup intact while replacing a missing or corrupt primary.
+	return writeEncryptedFile(path, backup, false)
+}
+
+func writeEncryptedFile(path string, encrypted []byte, createBackup bool) (err error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("create data directory: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		return fmt.Errorf("set temp file permissions: %w", err)
+	}
+	if _, err := tmp.Write(encrypted); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.Rename(tmpPath, path); err != nil {
+			return fmt.Errorf("install initial data file: %w", err)
+		}
+		tmpPath = ""
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("stat primary data file: %w", err)
+	}
+
+	backupPath := ""
+	if createBackup {
+		backupPath = path + ".bak"
+		if err := os.Remove(backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove previous backup: %w", err)
+		}
+	}
+
+	if err := replaceFile(path, tmpPath, backupPath); err != nil {
+		return err
+	}
+	tmpPath = ""
+	return nil
+}
+
+func replaceFile(primaryPath, replacementPath, backupPath string) error {
+	primary, err := syscall.UTF16PtrFromString(primaryPath)
+	if err != nil {
+		return fmt.Errorf("encode primary path: %w", err)
+	}
+	replacement, err := syscall.UTF16PtrFromString(replacementPath)
+	if err != nil {
+		return fmt.Errorf("encode replacement path: %w", err)
+	}
+
+	var backup *uint16
+	if backupPath != "" {
+		backup, err = syscall.UTF16PtrFromString(backupPath)
+		if err != nil {
+			return fmt.Errorf("encode backup path: %w", err)
+		}
+	}
+
+	result, _, callErr := procReplaceFileW.Call(
+		uintptr(unsafe.Pointer(primary)),
+		uintptr(unsafe.Pointer(replacement)),
+		uintptr(unsafe.Pointer(backup)),
+		replaceFileWriteThrough,
+		0,
+		0,
+	)
+	if result == 0 {
+		return fmt.Errorf("ReplaceFileW: %w", callErr)
+	}
+	return nil
 }

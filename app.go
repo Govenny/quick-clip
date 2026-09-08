@@ -24,6 +24,7 @@ type App struct {
 	configManager *internal.ConfigManager
 	config        *internal.Config
 	dataPath      string
+	storageReady  bool
 }
 
 // NewApp creates a new App application struct
@@ -47,12 +48,14 @@ func NewApp(action *internal.Action, configManager *internal.ConfigManager, conf
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	resource := internal.ReadContent(a.dataPath, a.keys)
-	if resource == nil {
-		// 如果读取失败（可能是解密失败），初始化为空数组，防止程序崩溃
+	resource, err := internal.ReadContent(a.dataPath, a.keys)
+	if err != nil {
+		fmt.Printf("内容存储不可用；已禁止自动保存以保护原始文件: %v\n", err)
 		a.content = make([]any, 0)
+		a.storageReady = false
 	} else {
 		a.content = resource
+		a.storageReady = true
 	}
 
 	// 根据config初始化注册相关配置
@@ -82,7 +85,12 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is about to close
 func (a *App) shutdown(ctx context.Context) {
-	internal.SaveContent(a.dataPath, a.keys, a.content)
+	if !a.storageReady {
+		return
+	}
+	if err := internal.SaveContent(a.dataPath, a.keys, a.content); err != nil {
+		fmt.Printf("退出时保存内容失败: %v\n", err)
+	}
 }
 
 func (a *App) GetContent() []any {
@@ -90,9 +98,15 @@ func (a *App) GetContent() []any {
 }
 
 func (a *App) SaveContent(data []any) {
+	if !a.storageReady {
+		fmt.Println("内容存储未成功加载；拒绝保存以保护磁盘数据")
+		return
+	}
+
 	a.content = data
-	fmt.Println(a.content)
-	internal.SaveContent(a.dataPath, a.keys, a.content)
+	if err := internal.SaveContent(a.dataPath, a.keys, a.content); err != nil {
+		fmt.Printf("保存内容失败: %v\n", err)
+	}
 }
 
 func (a *App) RegisterGlobalHotkey(key1 string, key2 string) {
