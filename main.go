@@ -30,10 +30,19 @@ func main() {
 	appRoot := filepath.Join(configDir, "quick-clip")
 
 	// Create application with options
+	windowWidth := config.Window.Width
+	if windowWidth <= 0 {
+		windowWidth = 256
+	}
+	windowHeight := config.Window.Height
+	if windowHeight <= 0 {
+		windowHeight = 384
+	}
+
 	err := wails.Run(&options.App{
 		Title:  "quick-clip",
-		Width:  256,
-		Height: 384,
+		Width:  windowWidth,
+		Height: windowHeight,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

@@ -11,11 +11,17 @@ export function Hide():Promise<void>;
 
 export function ImportJson(arg1:context.Context):Promise<Array<any>>;
 
+export function InstallResizeTracker(arg1:win.HWND):Promise<void>;
+
 export function RecordActiveWindow():Promise<win.HWND>;
 
 export function RestoreFocus(arg1:win.HWND):Promise<void>;
 
 export function SendPaste():Promise<void>;
+
+export function SetOnResized(arg1:any):Promise<void>;
+
+export function SetResizeSuppressed(arg1:boolean):Promise<void>;
 
 export function SetSelfHwnd(arg1:win.HWND):Promise<void>;
 

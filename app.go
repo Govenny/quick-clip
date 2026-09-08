@@ -71,6 +71,8 @@ func (a *App) startup(ctx context.Context) {
 			if hwnd != 0 {
 				rootHwnd := internal.GetRootHWND(hwnd)
 				a.action.SetSelfHwnd(rootHwnd)
+				a.action.SetOnResized(a.persistWindowSize)
+				a.action.InstallResizeTracker(rootHwnd)
 
 				// 初始化完成后，先用原生方式藏起来
 				// 这样 Wails 认为窗口是“显示”的，WebView2 会继续工作
@@ -170,12 +172,16 @@ func (a *App) HideAndRestore() {
 
 // 进入设置模式：变大
 func (a *App) EnterSettingsMode() {
+	a.action.SetResizeSuppressed(true)
 	a.action.SetSizeNative(600, 450)
+	a.action.SetResizeSuppressed(false)
 }
 
 // 退出设置模式：变回紧凑小窗口
 func (a *App) ExitSettingsMode() {
+	a.action.SetResizeSuppressed(true)
 	a.action.SetSizeNative(320, 480)
+	a.action.SetResizeSuppressed(false)
 }
 
 // GetConfig 供前端获取当前配置
@@ -197,6 +203,18 @@ func (a *App) UpdateConfig(newCfg *internal.Config) string {
 func (a *App) SetOpacity(opacity uint8) {
 	a.config.Appearance.Opacity = opacity
 	a.action.SetTransparency(opacity)
+}
+
+// persistWindowSize is called (debounced) after a user resizes the window.
+func (a *App) persistWindowSize(width, height int32) {
+	if a.config == nil || a.configManager == nil {
+		return
+	}
+	a.config.Window.Width = int(width)
+	a.config.Window.Height = int(height)
+	if err := a.configManager.Save(a.config); err != nil {
+		fmt.Printf("保存窗口尺寸失败: %v\n", err)
+	}
 }
 
 func (a *App) GetDataPath() string {

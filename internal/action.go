@@ -58,6 +58,12 @@ const (
 
 type Action struct {
 	selfHwnd win.HWND
+
+	oldWndProc     uintptr
+	newWndProc     uintptr
+	onResized      func(int32, int32)
+	resizeSuppress bool
+	resizeTimer    *time.Timer
 }
 
 func NewAction() *Action {
@@ -368,4 +374,51 @@ func (a *Action) ImportJson(ctx context.Context) []any {
 		return nil
 	}
 	return content
+}
+
+// resizeAction bridges the package-level window procedure back to the live Action.
+var resizeAction *Action
+
+// SetOnResized registers the callback invoked (debounced) after the window is resized by the user.
+func (a *Action) SetOnResized(cb func(int32, int32)) {
+	a.onResized = cb
+}
+
+// SetResizeSuppressed temporarily disables resize persistence, e.g. while toggling settings window size.
+func (a *Action) SetResizeSuppressed(suppress bool) {
+	a.resizeSuppress = suppress
+}
+
+// InstallResizeTracker subclasses the Wails shell window to observe WM_SIZE and persist user resizes.
+func (a *Action) InstallResizeTracker(hwnd win.HWND) {
+	if hwnd == 0 {
+		return
+	}
+	resizeAction = a
+	a.newWndProc = syscall.NewCallback(resizeWindowProc)
+	a.oldWndProc = win.SetWindowLongPtr(hwnd, win.GWLP_WNDPROC, a.newWndProc)
+}
+
+func resizeWindowProc(hwnd win.HWND, msg uint32, wparam, lparam uintptr) uintptr {
+	if msg == win.WM_SIZE && resizeAction != nil && wparam != 1 {
+		width := int32(uint16(lparam & 0xFFFF))
+		height := int32(uint16((lparam >> 16) & 0xFFFF))
+		resizeAction.handleResized(width, height)
+	}
+	if resizeAction == nil || resizeAction.oldWndProc == 0 {
+		return 0
+	}
+	return win.CallWindowProc(resizeAction.oldWndProc, hwnd, msg, wparam, lparam)
+}
+
+func (a *Action) handleResized(width, height int32) {
+	if a.resizeSuppress || width <= 0 || height <= 0 || a.onResized == nil {
+		return
+	}
+	if a.resizeTimer != nil {
+		a.resizeTimer.Stop()
+	}
+	a.resizeTimer = time.AfterFunc(400*time.Millisecond, func() {
+		a.onResized(width, height)
+	})
 }

@@ -18,6 +18,10 @@ export function ImportJson(arg1) {
   return window['go']['internal']['Action']['ImportJson'](arg1);
 }
 
+export function InstallResizeTracker(arg1) {
+  return window['go']['internal']['Action']['InstallResizeTracker'](arg1);
+}
+
 export function RecordActiveWindow() {
   return window['go']['internal']['Action']['RecordActiveWindow']();
 }
@@ -28,6 +32,14 @@ export function RestoreFocus(arg1) {
 
 export function SendPaste() {
   return window['go']['internal']['Action']['SendPaste']();
+}
+
+export function SetOnResized(arg1) {
+  return window['go']['internal']['Action']['SetOnResized'](arg1);
+}
+
+export function SetResizeSuppressed(arg1) {
+  return window['go']['internal']['Action']['SetResizeSuppressed'](arg1);
 }
 
 export function SetSelfHwnd(arg1) {

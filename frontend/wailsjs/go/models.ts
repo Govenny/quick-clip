@@ -12,6 +12,20 @@ export namespace internal {
 	        this.opacity = source["opacity"];
 	    }
 	}
+	export class WindowConfig {
+	    width: number;
+	    height: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WindowConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.width = source["width"];
+	        this.height = source["height"];
+	    }
+	}
 	export class ShortcutsConfig {
 	    wakeUp: string[];
 	    pasteWaitTime: number;
@@ -42,6 +56,7 @@ export namespace internal {
 	    general: GeneralConfig;
 	    shortcuts: ShortcutsConfig;
 	    appearance: AppearanceConfig;
+	    window: WindowConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -52,6 +67,7 @@ export namespace internal {
 	        this.general = this.convertValues(source["general"], GeneralConfig);
 	        this.shortcuts = this.convertValues(source["shortcuts"], ShortcutsConfig);
 	        this.appearance = this.convertValues(source["appearance"], AppearanceConfig);
+	        this.window = this.convertValues(source["window"], WindowConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -72,6 +88,7 @@ export namespace internal {
 		    return a;
 		}
 	}
+	
 	
 
 }

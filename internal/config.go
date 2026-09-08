@@ -19,10 +19,16 @@ type AppearanceConfig struct {
 	Opacity uint8 `json:"opacity"`
 }
 
+type WindowConfig struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
 type Config struct {
 	General    GeneralConfig    `json:"general"`
 	Shortcuts  ShortcutsConfig  `json:"shortcuts"`
 	Appearance AppearanceConfig `json:"appearance"`
+	Window     WindowConfig     `json:"window"`
 }
 
 // Config 定义你的配置项
@@ -58,6 +64,10 @@ func (m *ConfigManager) Load() (*Config, error) {
 			},
 			AppearanceConfig{
 				Opacity: 250,
+			},
+			WindowConfig{
+				Width:  256,
+				Height: 384,
 			},
 		}, nil
 	}
