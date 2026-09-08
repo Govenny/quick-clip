@@ -279,8 +279,12 @@
 				on:contextmenu={(e) => handleContextMenu(e, itemKey + "." + key, val, false)}
 				role="button"
 				tabindex="0"
+				title={typeof val === "string" ? val : ""}
 			>
 				<span class="item-key">{key}</span>
+				{#if typeof val === "string" && val.includes("\n")}
+					<span class="multiline-indicator" title={`Multiline content (${val.split("\n").length} lines)`}>{val.split("\n").length} lines</span>
+				{/if}
 				{#if copied}
 					<span class="copied-indicator">已复制</span>
 				{/if}
@@ -470,6 +474,19 @@
 		margin-right: 6px;
 		font-weight: 500;
 		letter-spacing: 0;
+	}
+	.multiline-indicator {
+		flex: 0 0 auto;
+		margin-right: 6px;
+		padding: 1px 5px;
+		border: 1px solid rgba(79, 135, 169, 0.16);
+		border-radius: 3px;
+		background: rgba(220, 239, 249, 0.42);
+		color: #4b7894;
+		font-size: 10px;
+		font-weight: 500;
+		line-height: 14px;
+		white-space: nowrap;
 	}
 	.nested-list {
 		width: calc(100% - 10px);

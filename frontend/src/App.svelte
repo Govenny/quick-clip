@@ -263,23 +263,30 @@
     function handleKeyDown(event, isTitleInput) {
         const { key } = event;
 
-        if (key === 'Enter') {
-            event.preventDefault();
-
-            if (isTitleInput) {
-                textInputRef?.focus();
-            } else {
-                if (isFormValid) {
-                    confirmAddText();
-                }
-            }
-        } else if (key === 'Escape') {
+        if (key === 'Escape') {
             cancelAddText();
-        } else if (key === 'Tab' && isTitleInput) {
-            if (event.shiftKey === false) {
+            return;
+        }
+
+        if (key === 'Enter') {
+            if (isTitleInput) {
                 event.preventDefault();
                 textInputRef?.focus();
+                return;
             }
+
+            // 内容框使用 Shift+Enter 插入换行；Enter 保存当前条目。
+            if (event.shiftKey) {
+                return;
+            }
+
+            event.preventDefault();
+            if (isFormValid) {
+                confirmAddText();
+            }
+        } else if (key === 'Tab' && isTitleInput && event.shiftKey === false) {
+            event.preventDefault();
+            textInputRef?.focus();
         }
     }
 
@@ -671,10 +678,10 @@
         <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <div class="input-group">
                 <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
-                <input type="text" class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Content" on:keydown={(e) => handleKeyDown(e, false)}/>
+                <textarea class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Command" spellcheck="false" on:keydown={(e) => handleKeyDown(e, false)}></textarea>
             </div>
             <div class="modal-footer">
-                <span class="hint">Tab to change box / Enter to save</span>
+                <span class="hint">Shift+Enter for newline / Enter to save</span>
             </div>
         </div>
     </div>
@@ -1096,14 +1103,27 @@
         flex-direction: column;
     }
 
-        .input-group input {
+    .input-group input,
+    .input-group textarea {
+        box-sizing: border-box;
         border: none;
         padding: 12px 16px;
         font-size: 14px;
         outline: none;
         width: 100%;
         background: transparent;
-        transition: background 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+        color: #293b4a;
+        transition: background-color 0.18s ease;
+    }
+
+    .input-group textarea {
+        min-height: 112px;
+        max-height: 220px;
+        resize: vertical;
+        line-height: 1.45;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .title-input {
