@@ -712,20 +712,31 @@
 
 <style>
     .app-container {
-        width: 100vw;
-        height: 100vh;
-        background: rgba(255, 255, 255, 0.92);
+        width: 100%;
+        height: 100%;
+        background: rgba(248, 250, 252, 0.68);
+        -webkit-backdrop-filter: blur(28px) saturate(1.28);
+        backdrop-filter: blur(28px) saturate(1.28);
+        border: 1px solid rgba(255, 255, 255, 0.68);
+        border-radius: 8px;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.72),
+            inset 0 0 0 1px rgba(99, 119, 139, 0.06),
+            0 8px 24px rgba(25, 38, 52, 0.16);
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        isolation: isolate;
     }
 
     .sticky-header {
         flex-shrink: 0;
-        background: rgba(245, 245, 245, 0.85);
-        backdrop-filter: blur(20px);
-        border-bottom: 1px solid rgba(0,0,0,0.08);
-        padding: 8px 10px 3px;
+        background: rgba(244, 248, 251, 0.52);
+        -webkit-backdrop-filter: blur(24px) saturate(1.35);
+        backdrop-filter: blur(24px) saturate(1.35);
+        border-bottom: 1px solid rgba(74, 96, 116, 0.1);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+        padding: 8px 10px 4px;
         z-index: 10;
     }
 
@@ -742,20 +753,33 @@
     }
 
     .search-input {
-            width: 100%;
-            height: 26px;
-            border: 1px solid rgba(0,0,0,0.1);
-            background: #fff;
-            border-radius: 4px;
-            padding: 0 8px;
-            font-size: 13px;
-            outline: none;
-            transition: all 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
-        }
+        width: 100%;
+        height: 26px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        background: rgba(255, 255, 255, 0.46);
+        border-radius: 6px;
+        padding: 0 9px;
+        color: #263442;
+        font-family: inherit;
+        font-size: 13px;
+        outline: none;
+        box-shadow:
+            inset 0 0 0 1px rgba(75, 98, 119, 0.07),
+            0 1px 3px rgba(32, 48, 63, 0.06);
+        transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .search-input::placeholder {
+        color: rgba(62, 78, 94, 0.55);
+    }
 
     .search-input:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        background: rgba(255, 255, 255, 0.72);
+        border-color: rgba(111, 183, 220, 0.58);
+        box-shadow:
+            inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+            0 0 0 2px rgba(73, 156, 201, 0.13),
+            0 3px 10px rgba(35, 81, 108, 0.08);
     }
 
     .action-wrapper {
@@ -763,24 +787,28 @@
     }
 
     .icon-btn {
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 6px;
         width: 26px;
         height: 26px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #555;
+        color: #536475;
         cursor: pointer;
-        transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        box-shadow: inset 0 0 0 1px rgba(74, 97, 117, 0.04);
+        transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
         padding: 0;
     }
 
     .icon-btn:hover {
-        background: rgba(0,0,0,0.06);
-        color: #000;
-        transform: scale(1.08);
+        background: rgba(226, 242, 250, 0.72);
+        border-color: rgba(255, 255, 255, 0.82);
+        color: #236b96;
+        box-shadow:
+            inset 0 0 0 1px rgba(77, 151, 190, 0.12),
+            0 2px 8px rgba(31, 80, 107, 0.1);
     }
 
     .icon-btn svg {
@@ -793,9 +821,10 @@
         align-items: center;
         gap: 4px;
         padding: 2px 6px 2px 4px;
-        border: 1px solid rgba(0,0,0,0.06);
+        border: 1px solid rgba(255, 255, 255, 0.56);
         border-radius: 20px;
-        background: rgba(255,255,255,0.5);
+        background: rgba(255, 255, 255, 0.28);
+        box-shadow: inset 0 0 0 1px rgba(71, 94, 115, 0.045);
         cursor: pointer;
         user-select: none;
         outline: none;
@@ -804,15 +833,18 @@
         white-space: nowrap;
         margin-right: 4px;
         flex-shrink: 0;
-        transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, gap 0.28s ease, padding 0.28s ease;
         overflow: hidden;
     }
 
     .paste-toggle:hover {
         gap: 8px;
         padding: 2px 8px 2px 10px;
-        background: rgba(255,255,255,0.85);
-        border-color: rgba(0,0,0,0.12);
+        background: rgba(255, 255, 255, 0.65);
+        border-color: rgba(255, 255, 255, 0.86);
+        box-shadow:
+            inset 0 0 0 1px rgba(72, 139, 177, 0.09),
+            0 2px 8px rgba(29, 68, 91, 0.08);
     }
 
     .paste-toggle:focus-visible {
@@ -879,10 +911,14 @@
         position: absolute;
         top: 30px;
         right: 0;
-        background: #fff;
-        border: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border-radius: 6px;
+        background: rgba(248, 250, 252, 0.82);
+        -webkit-backdrop-filter: blur(22px) saturate(1.3);
+        backdrop-filter: blur(22px) saturate(1.3);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.65),
+            0 8px 22px rgba(27, 43, 57, 0.17);
+        border-radius: 7px;
         padding: 4px;
         min-width: 120px;
         z-index: 9999;
@@ -903,14 +939,39 @@
     }
 
     .dropdown-menu button:hover {
-        background: #3b82f6;
-        color: white;
+        background: rgba(213, 235, 247, 0.76);
+        color: #215f82;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58);
     }
 
     .content-scrollable {
         flex: 1;
+        min-width: 0;
+        overflow-x: hidden;
         overflow-y: auto;
         padding: 4px 0;
+    }
+
+    .content-scrollable::-webkit-scrollbar {
+        width: 2px;
+    }
+
+    .content-scrollable::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .content-scrollable::-webkit-scrollbar-thumb {
+        background: rgba(30, 41, 59, 0.08);
+        border-radius: 2px;
+        transition: background-color 0.2s ease;
+    }
+
+    .content-scrollable:hover::-webkit-scrollbar-thumb {
+        background: rgba(30, 41, 59, 0.16);
+    }
+
+    .content-scrollable::-webkit-scrollbar-thumb:hover {
+        background: rgba(30, 41, 59, 0.25);
     }
 
     .empty-state {
@@ -957,12 +1018,15 @@
         color: #3730a3;
     }
 
-        .context-menu {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(0,0,0,0.1);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-        border-radius: 6px;
+    .context-menu {
+        background: rgba(248, 250, 252, 0.84);
+        -webkit-backdrop-filter: blur(22px) saturate(1.3);
+        backdrop-filter: blur(22px) saturate(1.3);
+        border: 1px solid rgba(255, 255, 255, 0.74);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.68),
+            0 10px 26px rgba(25, 41, 55, 0.18);
+        border-radius: 7px;
         padding: 4px;
         min-width: 128px;
         z-index: 9999;
@@ -979,8 +1043,9 @@
         }
 
     .menu-item:hover {
-        background: #3b82f6;
-        color: #fff;
+        background: rgba(213, 235, 247, 0.78);
+        color: #215f82;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.56);
     }
 
     .menu-item.delete:hover {
@@ -996,8 +1061,9 @@
     .modal-overlay {
         position: fixed;
         top: 0;left: 0;right: 0;bottom: 0;
-        background: rgba(255,255,255,0.5);
-        z-index: 2000;
+        background: rgba(215, 225, 233, 0.28);
+        -webkit-backdrop-filter: blur(8px) saturate(1.12);
+        backdrop-filter: blur(8px) saturate(1.12);
         display: flex;
         align-items: flex-start;
         justify-content: center;
@@ -1006,11 +1072,15 @@
     }
 
     .modal-box {
-        background: #fff;
+        background: rgba(249, 251, 252, 0.86);
+        -webkit-backdrop-filter: blur(26px) saturate(1.25);
+        backdrop-filter: blur(26px) saturate(1.25);
         width: 380px;
         border-radius: 8px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.72),
+            0 14px 38px rgba(24, 39, 52, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.72);
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -1134,7 +1204,7 @@
     }
 
     .search-results-overlay {
-        background: #fff;
+        background: rgba(255, 255, 255, 0.16);
         min-height: 100%;
         padding-top: 5px;
     }
@@ -1147,8 +1217,8 @@
         }
 
     .search-result-item:hover {
-        background: rgba(59, 130, 246, 0.1);
-        padding-left: 20px;
+        background: rgba(224, 239, 248, 0.58);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
     }
 
     .result-path {

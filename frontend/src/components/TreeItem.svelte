@@ -2,8 +2,6 @@
 	import { slide } from "svelte/transition";
 	import { quartOut } from 'svelte/easing';
 	import { PasteAndHide, HideAndRestore } from "../../wailsjs/go/main/App";
-	import catalogExpandImage from '/src/assets/images/catalog-expand.png';
-	import catalogImage from '/src/assets/images/catalog.png';
 	// import { LogInfo } from "../../wailsjs/runtime/runtime"; // 暂时注释，防报错
 
 	// props
@@ -233,12 +231,9 @@
                 on:drop={(e) => handleDrop(e, index)}
 				on:contextmenu={(e) => handleContextMenu(e, itemKey + "." + key, val, true)}
 			>
-				<span class="icon">
-					<img
-						class="catalog-icon"
-						src={expanded[itemKey + "." + key] ? catalogExpandImage : catalogImage}
-						alt={expanded[itemKey + "." + key] ? "收起" : "展开"}
-					/>
+				<span class="folder-icon" aria-hidden="true">
+					<span class="disclosure" class:expanded={expanded[itemKey + "." + key]}>›</span>
+					<span class="folder-mark"></span>
 				</span>
 				<span class="label">{key}</span>
 				<span class="drag-handle" title="拖拽排序">⋮⋮</span>
@@ -314,6 +309,9 @@
         display: flex;
         align-items: center;
         width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
         padding: 3px 8px;
         margin: 1px 0;
         background: transparent;
@@ -323,7 +321,8 @@
         font-size: 13px;
         color: #333;
         text-align: left;
-                transition: background-color 0.2s cubic-bezier(0.34, 1.3, 0.64, 1);
+        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.045);
+        transition: background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
     }
 
 		/* 拖拽时的半透明 */
@@ -368,20 +367,127 @@
         pointer-events: none;
 	}
 
-	/* Hover 效果 */
+	/* macOS 风格的轻量玻璃悬停态 */
 	.folder-btn:hover,
 	.item-line:hover {
-		background-color: rgba(0, 0, 0, 0.06);
+		background-color: rgba(235, 241, 248, 0.62);
+		-webkit-backdrop-filter: blur(12px) saturate(1.2);
+		backdrop-filter: blur(12px) saturate(1.2);
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.82),
+			inset 0 -1px 0 rgba(91, 108, 128, 0.12),
+			0 2px 7px rgba(31, 41, 55, 0.09);
+		color: #1f2937;
 	}
 
     /* ... 其他图标、文字、复制提示样式保持不变 ... */
-	.folder-btn { font-weight: 500; color: #444; }
-	.icon { margin-right: 6px; display: flex; align-items: center; width: 16px; }
-	.catalog-icon { width: 16px; height: 16px; }
-	.label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px; }
-	.item-key { color: #333; margin-right: 6px; font-weight: 500; }
-	.nested-list { margin-left: 10px; padding-left: 10px; border-left: 1px solid rgba(0, 0, 0, 0.08); list-style: none; }
-	.drag-handle { margin-left: auto; color: transparent; cursor: grab; font-size: 12px; transition: color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1); }
+	.folder-btn {
+		font-weight: 500;
+		color: #34404d;
+		background: rgba(235, 244, 250, 0.3);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.58),
+			inset 0 -1px 0 rgba(56, 99, 135, 0.09);
+	}
+	.folder-btn:hover {
+		background-color: rgba(225, 239, 249, 0.7);
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.88),
+			inset 0 -1px 0 rgba(52, 116, 163, 0.15),
+			0 2px 8px rgba(38, 73, 99, 0.1);
+	}
+	.folder-icon {
+		display: inline-flex;
+		align-items: center;
+		width: 32px;
+		margin-right: 4px;
+		color: #738294;
+		flex-shrink: 0;
+	}
+	.disclosure {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 12px;
+		font-size: 16px;
+		line-height: 1;
+		transform-origin: center;
+		transition: transform 0.18s ease, color 0.18s ease;
+	}
+	.disclosure.expanded {
+		transform: rotate(90deg);
+		color: #387da8;
+	}
+	.folder-mark {
+		position: relative;
+		display: inline-block;
+		width: 13px;
+		height: 9px;
+		margin-left: 2px;
+		border: 1px solid rgba(51, 126, 171, 0.72);
+		border-radius: 2px;
+		background: rgba(209, 235, 248, 0.42);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+		transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+	}
+	.folder-mark::before {
+		content: "";
+		position: absolute;
+		left: 1px;
+		top: -4px;
+		width: 6px;
+		height: 3px;
+		border: 1px solid rgba(51, 126, 171, 0.72);
+		border-bottom: 0;
+		border-radius: 2px 2px 0 0;
+		background: rgba(225, 243, 252, 0.82);
+	}
+	.folder-btn:hover .disclosure {
+		color: #256b98;
+	}
+	.folder-btn:hover .folder-mark {
+		border-color: rgba(31, 132, 190, 0.9);
+		background: rgba(190, 229, 247, 0.58);
+		box-shadow: 0 0 6px rgba(55, 164, 214, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.48);
+	}
+	.label {
+		flex: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		margin-right: 8px;
+		color: #2d4050;
+		font-weight: 600;
+		letter-spacing: 0;
+	}
+	.item-key {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: #2f3b47;
+		margin-right: 6px;
+		font-weight: 500;
+		letter-spacing: 0;
+	}
+	.nested-list {
+		width: calc(100% - 10px);
+		max-width: calc(100% - 10px);
+		margin-left: 10px;
+		padding-left: 10px;
+		box-sizing: border-box;
+		border-left: 1px solid rgba(0, 0, 0, 0.08);
+		list-style: none;
+	}
+	.drag-handle {
+		flex: 0 0 auto;
+		margin-left: auto;
+		color: transparent;
+		cursor: grab;
+		font-size: 12px;
+		transition: color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+	}
 	.folder-btn:hover .drag-handle, .item-line:hover .drag-handle { color: #bbb; }
 	.drag-handle:hover { color: #666 !important; }
 		.copied-indicator { margin-left: auto; padding-left: 8px; color: #10b981; font-size: 11px; animation: fadeIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1); }

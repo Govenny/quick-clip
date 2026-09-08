@@ -232,8 +232,9 @@ import { createEventDispatcher, onMount } from 'svelte';
     .overlay {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.25); /* 轻微遮罩 */
-        backdrop-filter: blur(2px);
+        background: rgba(202, 214, 224, 0.24);
+        -webkit-backdrop-filter: blur(10px) saturate(1.15);
+        backdrop-filter: blur(10px) saturate(1.15);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -242,21 +243,26 @@ import { createEventDispatcher, onMount } from 'svelte';
 
     .settings-window {
         width: 500px;
-        height: 350px; /* 固定高度，保持紧凑 */
-        background: #fff;
+        height: 350px;
+        background: rgba(248, 250, 252, 0.8);
+        -webkit-backdrop-filter: blur(30px) saturate(1.28);
+        backdrop-filter: blur(30px) saturate(1.28);
         border-radius: 8px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.76),
+            0 16px 44px rgba(24, 39, 53, 0.22);
         display: flex;
         overflow: hidden;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid rgba(255, 255, 255, 0.72);
         font-size: 13px;
     }
 
     /* --- 侧边栏 --- */
     .sidebar {
         width: 140px;
-        background: #f5f5f7;
-        border-right: 1px solid #e0e0e0;
+        background: rgba(230, 238, 244, 0.48);
+        border-right: 1px solid rgba(72, 99, 121, 0.1);
+        box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.46);
         display: flex;
         flex-direction: column;
         padding: 10px 0;
@@ -265,8 +271,9 @@ import { createEventDispatcher, onMount } from 'svelte';
     .sidebar-title {
         padding: 0 16px 10px;
         font-weight: 600;
-        color: #888;
-        font-size: 12px;
+        color: #526678;
+        font-size: 11px;
+        letter-spacing: 0;
         text-transform: uppercase;
     }
 
@@ -289,10 +296,11 @@ import { createEventDispatcher, onMount } from 'svelte';
     .nav-list li:hover { background: rgba(0,0,0,0.05); }
     
     .nav-list li.active {
-        background: #e4e4e7; /* 选中态，不要太刺眼 */
-        color: #000;
+        background: rgba(219, 237, 247, 0.72);
+        color: #234b63;
         font-weight: 500;
-        border-left: 3px solid #3b82f6; /* 蓝色指示条 */
+        border-left: 2px solid rgba(42, 137, 188, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
     }
 
     /* --- 内容区 --- */
@@ -300,14 +308,21 @@ import { createEventDispatcher, onMount } from 'svelte';
         flex: 1;
         display: flex;
         flex-direction: column;
-        background: #fff;
+        background: rgba(255, 255, 255, 0.22);
     }
 
     .content-header {
         padding: 12px 20px;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid rgba(75, 99, 119, 0.09);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
     }
-    .content-header h2 { margin: 0; font-size: 16px; font-weight: 600; color: #333; }
+    .content-header h2 {
+        margin: 0;
+        color: #293b4a;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
 
     .content-body {
         flex: 1;
@@ -328,16 +343,16 @@ import { createEventDispatcher, onMount } from 'svelte';
         flex-direction: column;
     }
 
-    .setting-info label { font-weight: 500; color: #333; margin-bottom: 2px; }
-    .setting-info .desc { color: #999; font-size: 10px; }
+    .setting-info label { font-weight: 500; color: #2e3d4a; margin-bottom: 2px; }
+    .setting-info .desc { color: #71808e; font-size: 10px; }
 
     .content-footer {
         padding: 10px 20px;
-        border-top: 1px solid #f0f0f0;
+        border-top: 1px solid rgba(75, 99, 119, 0.09);
         display: flex;
         justify-content: flex-end;
         gap: 10px;
-        background: #fafafa;
+        background: rgba(239, 245, 249, 0.38);
     }
 
     button { font-size: 13px; padding: 6px 14px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
