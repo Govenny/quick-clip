@@ -270,13 +270,11 @@
 
 	.folder-btn:hover,
 	.item-line:hover {
-		background-color: rgba(235, 241, 248, 0.62);
-		-webkit-backdrop-filter: blur(12px) saturate(1.2);
-		backdrop-filter: blur(12px) saturate(1.2);
+		background-color: rgba(230, 240, 250, 0.85);
 		box-shadow:
-			inset 0 0 0 1px rgba(255, 255, 255, 0.82),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.9),
 			inset 0 -1px 0 rgba(91, 108, 128, 0.12),
-			0 2px 7px rgba(31, 41, 55, 0.09);
+			0 2px 6px rgba(31, 41, 55, 0.08);
 		color: #1f2937;
 	}
 

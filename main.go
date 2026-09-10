@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"quick-clip/internal"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -18,6 +19,23 @@ import (
 var assets embed.FS
 
 func main() {
+	// 优化 Chromium / WebView2 启动参数，显著降低后台常驻与网络开销，同时保证流畅响应
+	existingArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+	optArgs := []string{
+		"--renderer-process-limit=1",
+		"--disable-background-networking",
+		"--disable-component-update",
+		"--disable-domain-reliability",
+		"--disable-sync",
+		"--disable-features=Translate,MediaRouter,OptimizationHints",
+		"--disk-cache-size=10485760",
+	}
+	if existingArgs != "" {
+		os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", existingArgs+" "+strings.Join(optArgs, " "))
+	} else {
+		os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", strings.Join(optArgs, " "))
+	}
+
 	action := internal.NewAction()
 	configManager := internal.NewConfigManager()
 	config, _ := configManager.Load()

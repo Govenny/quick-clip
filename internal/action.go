@@ -64,10 +64,13 @@ type Action struct {
 	onResized      func(int32, int32)
 	resizeSuppress bool
 	resizeTimer    *time.Timer
+	memoryTrimmer  *MemoryTrimmer
 }
 
 func NewAction() *Action {
-	return &Action{}
+	return &Action{
+		memoryTrimmer: NewMemoryTrimmer(),
+	}
 }
 
 // 句柄操作----------------------------------------------------------------
@@ -119,6 +122,10 @@ func GetRootHWND(hwnd win.HWND) win.HWND {
 
 // 显示窗口----------------------------------------------------------------
 func (a *Action) ShowNoActivate() {
+	if a.memoryTrimmer != nil {
+		a.memoryTrimmer.CancelTrim()
+	}
+
 	if a.selfHwnd == 0 {
 		return
 	}
@@ -170,6 +177,9 @@ func (a *Action) ShowNoActivate() {
 // Hide 封装隐藏
 func (a *Action) Hide() {
 	win.ShowWindow(a.selfHwnd, win.SW_HIDE)
+	if a.memoryTrimmer != nil {
+		a.memoryTrimmer.ScheduleTrim(5000 * time.Millisecond)
+	}
 }
 
 func (a *Action) RecordActiveWindow() (hwnd win.HWND) {

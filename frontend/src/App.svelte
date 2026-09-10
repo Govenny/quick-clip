@@ -409,7 +409,7 @@
 
     // 焦点--------------------------------------------
     function handleBlur() {
-        requestAnimationFrame(() => {
+        setTimeout(() => {
             if (document.hasFocus()) {
                 return;
             }
@@ -419,7 +419,7 @@
             }
 
             HideWindow();
-        });
+        }, 10);
     }
 
     function updateData(newData) {
