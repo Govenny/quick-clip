@@ -16,24 +16,23 @@
     }
     import { quartOut, cubicOut } from 'svelte/easing';
     import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow} from '../wailsjs/go/main/App'; 
-    import { LogInfo, Quit, EventsOn   } from '../wailsjs/runtime';
+    import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
     import Setting from './components/Setting.svelte';
-    // 强弹性 (0.34, 1.56, 0.64, 1) — 主要点击交互（按钮、菜单项、开关）
-    // 中弹性 (0.34, 1.3, 0.64, 1) — 功能性元素（搜索框、结果列表）
-    // 弱弹性 (0.34, 1.15, 0.64, 1) — 辅助性过渡（边框、阴影变化）
+    import { normalizeTree, deleteNodeById, moveNode, searchTree, generateId } from './utils/treeAdapter';
+
     let data = [];
     let expanded = {};
     let showMenu = false;
-    let isHovered = false;
     let showSettings = false;
 
     // 粘贴模式开关: true=Auto Paste, false=Not Paste
     let autoPaste = true;
 
     // 编辑模式
-    let isEditMode = false; // 标记当前是编辑还是新增
-    let editingPath = "";
+    let isEditMode = false;
+    let editingNode = null;
+    let targetFolderNode = null;
 
     // 添加目录
     let showDirInput = false;
@@ -51,14 +50,12 @@
     let showDeleteConfirm = false;
     let itemToDelete = null;
 
-        // 在父组件中（例如 App.svelte）
+    // 全局上下文菜单
     let globalContextMenu = {
         visible: false,
         x: 0,
         y: 0,
-        targetKey: null,
-        targetValue: null,
-        isFolder: false,
+        targetNode: null,
         flipX: false,
         flipY: false
     };
@@ -68,35 +65,32 @@
             visible: false,
             x: 0,
             y: 0,
-            targetKey: null,
-            targetValue: null,
-            isFolder: false,
+            targetNode: null,
             flipX: false,
             flipY: false
         };
     }
 
-    function showContextMenu(e, key, val, isFolder) {
+    function showContextMenu(e, node) {
         e.preventDefault();
         e.stopPropagation();
         
-                // 估算菜单尺寸
-        const menuWidth = 128;   // 页面宽度 256/2
-        const itemHeight = 28;   // 每个菜单项约 28px
-        const dividerHeight = 9; // 分割线约 9px
-        const padding = 8;       // 上下 padding 4px*2
+        const isFolder = node && node.type === 'folder';
+        const menuWidth = 128;
+        const itemHeight = 28;
+        const dividerHeight = 9;
+        const padding = 8;
         
         let itemCount, dividerCount;
         if (isFolder) {
-            itemCount = 5;    // New Text + New Folder + Edit + (divider) + Delete
-            dividerCount = 3; // 两个 divider + 一个 divider 在 delete 前... 实际看模板是 3 个
+            itemCount = 4; // New Text + New Folder + Edit + Delete
+            dividerCount = 2;
         } else {
-            itemCount = 2;    // Edit + Delete
+            itemCount = 2; // Edit + Delete
             dividerCount = 1;
         }
         const menuHeight = itemCount * itemHeight + dividerCount * dividerHeight + padding;
         
-        // 检测窗口边界
         const winW = window.innerWidth;
         const winH = window.innerHeight;
         
@@ -107,9 +101,7 @@
             visible: true,
             x: flipX ? e.pageX - menuWidth : e.pageX,
             y: flipY ? e.pageY - menuHeight : e.pageY,
-            targetKey: key,
-            targetValue: val,
-            isFolder: isFolder,
+            targetNode: node,
             flipX,
             flipY
         };
@@ -119,7 +111,6 @@
         globalContextMenu.visible = false;
     }
 
-    // 点击页面其他地方关闭菜单
     function handleGlobalClick(e) {
         if (!e.target.closest('.context-menu')) {
             hideContextMenu();
@@ -131,78 +122,43 @@
     }
 
     function deleteItem() {
-		if (!globalContextMenu.targetKey) return;
+        if (!globalContextMenu.targetNode) return;
+        itemToDelete = globalContextMenu.targetNode;
+        showDeleteConfirm = true;
+        hideContextMenu();
+    }
 
-		// 保存要删除的项目信息
-		itemToDelete = {
-			key: globalContextMenu.targetKey,
-			isFolder: globalContextMenu.isFolder
-		};
+    function confirmDeleteItem() {
+        if (!itemToDelete) return;
 
-		// 显示确认弹窗
-		showDeleteConfirm = true;
-		// 隐藏右键菜单
-		hideContextMenu();
-	}
+        try {
+            deleteNodeById(data, itemToDelete.id);
+            updateData([...data]);
+            cancelDelete();
+        } catch (err) {
+            console.error("删除失败", err);
+        }
+    }
 
-	function confirmDeleteItem() {
-		if (!itemToDelete) return;
-
-		try {
-			// 获取父级路径
-			const keys = itemToDelete.key.split(".");
-			const propertyToDelete = keys.pop(); // 要删除的属性名
-			const parentPath = keys.join(".");
-
-			let parentObj = data;
-			if (parentPath !== "") {
-				const parentKeys = parentPath.split(".");
-				for (let k of parentKeys) {
-					if (parentObj && parentObj[k] !== undefined) {
-						parentObj = parentObj[k];
-					}
-				}
-			}
-
-			// 删除属性
-			if (parentObj && parentObj.hasOwnProperty(propertyToDelete)) {
-				delete parentObj[propertyToDelete];
-
-				// 更新数据
-				if (parentPath === "") {
-					updateData({ ...data });
-				} else {
-					updateData([...data]); // 如果是数组，需要新数组引用
-				}
-			}
-
-			// 隐藏弹窗
-			cancelDelete();
-		} catch (err) {
-			console.error("删除失败", err);
-		}
-	}
-
-	function cancelDelete() {
-		showDeleteConfirm = false;
-		itemToDelete = null;
-		cleanGlobalContextMenu();
-	}
-
+    function cancelDelete() {
+        showDeleteConfirm = false;
+        itemToDelete = null;
+        cleanGlobalContextMenu();
+    }
 
     // 监听来自后端的 show-settings 事件
-    const settingsEventListener = async (data) => {
+    const settingsEventListener = async () => {
         showSettings = true;
         EnterSettingsMode();
         ToggleWindow();
     };
 
     // 监听来自后端的 update-content 事件
-    const contentEventListener = async (payload) => {
+    const contentEventListener = async () => {
         try {
-            LogInfo("update-content发送成功")
+            LogInfo("update-content发送成功");
             const newData = await GetContent();
-            data = newData;
+            data = normalizeTree(newData);
             await tick();
         } catch (error) {
             console.error('Failed to load content:', error);
@@ -211,16 +167,16 @@
 
     onMount(() => {
         document.addEventListener('click', handleGlobalClick);
-        document.addEventListener('contextmenu', hideContextMenu); // 右键其他地方也关闭
+        document.addEventListener('contextmenu', hideContextMenu);
 
         EventsOn("show-settings", settingsEventListener);
         EventsOn("update-content", contentEventListener);
-        
     });
 
     onMount(async () => {
         try {
-            data = await GetContent();
+            const rawData = await GetContent();
+            data = normalizeTree(rawData);
         } catch (error) {
             console.error('Failed to load content:', error);
         }
@@ -229,20 +185,27 @@
     onDestroy(() => {
         document.removeEventListener('click', handleGlobalClick);
         document.removeEventListener('contextmenu', hideContextMenu);
-
     });
 
-    function toggleExpand(key) {
-        expanded[key] = !expanded[key];
+    function toggleExpand(id) {
+        expanded[id] = !expanded[id];
+        expanded = expanded;
     }
 
     function toggleMenu() {
         showMenu = !showMenu;
+        if (showMenu) {
+            targetFolderNode = null;
+        }
     }
 
     function addText() {
-        isEditMode = false; // 新增模式
-        editingPath = ""; // 清空路径
+        isEditMode = false;
+        editingNode = null;
+        targetFolderNode = (globalContextMenu.targetNode && globalContextMenu.targetNode.type === 'folder')
+            ? globalContextMenu.targetNode
+            : null;
+
         showTextInput = true;
         titleName = "";
         textName = "";
@@ -256,10 +219,9 @@
         });
     }
 
-    // 表单验证: titleName不包含. textName不包含.
-    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "" && !titleName.includes(".");
+    // 表单验证：名称与内容不能为空，点号已完全允许
+    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "";
 
-    // 键盘事件处理函数
     function handleKeyDown(event, isTitleInput) {
         const { key } = event;
 
@@ -275,7 +237,7 @@
                 return;
             }
 
-            // 内容框使用 Shift+Enter 插入换行；Enter 保存当前条目。
+            // 内容框使用 Shift+Enter 换行；Enter 保存
             if (event.shiftKey) {
                 return;
             }
@@ -291,62 +253,37 @@
     }
 
     function confirmAddText() {
-        // 简单校验
-        if (!titleName.trim() || !textName) {
+        const trimmedTitle = titleName.trim();
+        if (!trimmedTitle || !textName) {
             alert("请完善输入");
             return;
         }
-        if (titleName.includes(".")) {
-            alert("名称不能包含.");
-            return;
-        }
 
-        const newKey = titleName.trim();
-        const newVal = textName;
-
-        if (isEditMode) {
-            // --- 编辑逻辑 ---
-            try {
-                // 1. 获取父数组、索引、旧名称
-                const { parentArr, targetIndex, oldKey } = getParentArrayAndIndex(editingPath);
-                
-                // 2. 找到该对象
-                const itemObj = parentArr[targetIndex];
-                
-                // 3. 修改逻辑：如果是改名，需要 delete 旧 key
-                if (oldKey !== newKey) {
-                    delete itemObj[oldKey];
-                }
-                // 4. 写入新 Key-Value
-                itemObj[newKey] = newVal;
-
-                // 强制更新视图
-                if (editingPath.startsWith("0.") || !editingPath.includes(".")) {
-                   // 根目录稍微特殊，直接全量更新最稳
-                   data = [...data]; 
-                }
-            } catch (e) {
-                console.error("编辑失败", e);
-            }
+        if (isEditMode && editingNode) {
+            editingNode.name = trimmedTitle;
+            editingNode.value = textName;
+            updateData([...data]);
         } else {
-            // --- 新增逻辑 (保持原样) ---
-            const newItem = { [newKey]: newVal };
-            if (globalContextMenu.isFolder) {
-                // 如果是在文件夹上右键新增
-                // 需要解析 globalContextMenu.targetKey 找到那个文件夹数组
-                const pathParts = globalContextMenu.targetKey.split('.');
-                let current = data;
-                for (let i = 0; i < pathParts.length; i += 2) {
-                    current = current[parseInt(pathParts[i])][pathParts[i+1]];
+            const newNode = {
+                id: generateId(),
+                name: trimmedTitle,
+                type: 'text',
+                value: textName
+            };
+
+            if (targetFolderNode && targetFolderNode.type === 'folder') {
+                if (!Array.isArray(targetFolderNode.children)) {
+                    targetFolderNode.children = [];
                 }
-                current.push(newItem);
+                targetFolderNode.children.push(newNode);
+                expanded[targetFolderNode.id] = true;
+                expanded = expanded;
             } else {
-                // 根目录新增
-                data = [...data, newItem];
+                data = [...data, newNode];
             }
+            updateData([...data]);
         }
 
-        updateData(data); // 保存
         cancelAddText();
     }
 
@@ -354,17 +291,20 @@
         titleName = "";
         textName = "";
         showTextInput = false;
+        isEditMode = false;
+        editingNode = null;
+        targetFolderNode = null;
         cleanGlobalContextMenu();
     }
 
     function editText() {
+        if (!globalContextMenu.targetNode) return;
         isEditMode = true;
-        editingPath = globalContextMenu.targetKey; // 保存完整路径：0.FolderA.1.KeyName
+        editingNode = globalContextMenu.targetNode;
+        targetFolderNode = null;
         showTextInput = true;
-        
-        // 【修复点1】只截取最后一段作为名称显示
-        titleName = globalContextMenu.targetKey.split('.').pop(); 
-        textName = globalContextMenu.targetValue;
+        titleName = editingNode.name;
+        textName = editingNode.value || "";
         
         showMenu = false;
         hideContextMenu();
@@ -372,14 +312,17 @@
         tick().then(() => titleInputRef?.focus());
     }
 
-    // 自动聚焦
     $: if (showTextInput && titleInputRef) {
         setTimeout(() => titleInputRef.focus(), 0);
     }
 
     function addDir() {
-        isEditMode = false; // 新增模式
-        editingPath = ""; // 清空路径
+        isEditMode = false;
+        editingNode = null;
+        targetFolderNode = (globalContextMenu.targetNode && globalContextMenu.targetNode.type === 'folder')
+            ? globalContextMenu.targetNode
+            : null;
+
         showDirInput = true;
         dirName = "";
         showMenu = false;
@@ -394,60 +337,54 @@
 
     function confirmAddDir() {
         const newDirName = dirName.trim();
-        if (!newDirName || newDirName.includes(".")) {
+        if (!newDirName) {
             alert("名称无效");
             return;
         }
 
-        if (isEditMode) {
-            // --- 编辑逻辑 ---
-            try {
-                const { parentArr, targetIndex, oldKey } = getParentArrayAndIndex(editingPath);
-                const itemObj = parentArr[targetIndex];
-
-                // 文件夹只改名字，必须保留原来的子内容(Value)
-                const children = itemObj[oldKey]; 
-
-                if (oldKey !== newDirName) {
-                    delete itemObj[oldKey];      // 删除旧名
-                    itemObj[newDirName] = children; // 赋给新名，内容不变
-                }
-            } catch (e) {
-                console.error("文件夹编辑失败", e);
-            }
+        if (isEditMode && editingNode) {
+            editingNode.name = newDirName;
+            updateData([...data]);
         } else {
-            // --- 新增逻辑 (保持原样) ---
-            const newItem = { [newDirName]: [] };
-            if (globalContextMenu.isFolder) {
-                 // 逻辑同 Text 新增
-                const pathParts = globalContextMenu.targetKey.split('.');
-                let current = data;
-                for (let i = 0; i < pathParts.length; i += 2) {
-                    current = current[parseInt(pathParts[i])][pathParts[i+1]];
+            const newNode = {
+                id: generateId(),
+                name: newDirName,
+                type: 'folder',
+                children: []
+            };
+
+            if (targetFolderNode && targetFolderNode.type === 'folder') {
+                if (!Array.isArray(targetFolderNode.children)) {
+                    targetFolderNode.children = [];
                 }
-                current.push(newItem);
+                targetFolderNode.children.push(newNode);
+                expanded[targetFolderNode.id] = true;
+                expanded = expanded;
             } else {
-                data = [...data, newItem];
+                data = [...data, newNode];
             }
+            updateData([...data]);
         }
 
-        updateData(data);
-        showDirInput = false;
+        cancelAddDir();
     }
 
     function cancelAddDir() {
         showDirInput = false;
         dirName = "";
+        isEditMode = false;
+        editingNode = null;
+        targetFolderNode = null;
         cleanGlobalContextMenu();
     }
 
     function editDir() {
+        if (!globalContextMenu.targetNode) return;
         isEditMode = true;
-        editingPath = globalContextMenu.targetKey; // 保存完整路径
+        editingNode = globalContextMenu.targetNode;
+        targetFolderNode = null;
         showDirInput = true;
-        
-        // 【修复点1】只显示名称，不显示路径
-        dirName = globalContextMenu.targetKey.split('.').pop();
+        dirName = editingNode.name;
         
         showMenu = false;
         hideContextMenu();
@@ -459,13 +396,18 @@
         showMenu = false;
     }
 
-    // 焦点--------------------------------------------
-    let lastFocusTime = 0;
-
-    function handleFocus() {
-        lastFocusTime = Date.now();
+    function handleMoveNode(sourceId, targetId, dropType) {
+        const success = moveNode(data, sourceId, targetId, dropType);
+        if (success) {
+            if (dropType === 'inside') {
+                expanded[targetId] = true;
+                expanded = expanded;
+            }
+            updateData([...data]);
+        }
     }
 
+    // 焦点--------------------------------------------
     function handleBlur() {
         requestAnimationFrame(() => {
             if (document.hasFocus()) {
@@ -478,69 +420,26 @@
 
             HideWindow();
         });
-}
-    // ----------------------------------------------
+    }
 
     function updateData(newData) {
         data = newData;
         SaveContent(data);
     }
 
-    function getParentArrayAndIndex(pathStr) {
-        const parts = pathStr.split('.');
-        const keyName = parts.pop();
-        const indexStr = parts.pop();
-        const index = parseInt(indexStr);
-
-        let currentArr = data;
-        
-        if (parts.length > 0) {
-            for (let i = 0; i < parts.length; i += 2) {
-                const pIndex = parseInt(parts[i]);
-                const pKey = parts[i+1];
-                currentArr = currentArr[pIndex][pKey];
-            }
-        }
-        
-        return { parentArr: currentArr, targetIndex: index, oldKey: keyName };
-    }
-
     import { PasteAndHide, HideAndRestore } from '../wailsjs/go/main/App';
     let searchQuery = "";
     let searchResults = [];
 
-    function performSearch(items, query, path = "") {
-        if (!query.trim()) return [];
-        let results = [];
-        const q = query.toLowerCase();
-
-        for (const item of items) {
-            for (const [key, val] of Object.entries(item)) {
-                if (Array.isArray(val)) {
-                    results = [...results, ...performSearch(val, query, path + key + " > ")];
-                } else {
-                    if (key.toLowerCase().includes(q)) {
-                        results.push({
-                            name: key,
-                            content: val,
-                            fullPath: path + key
-                        });
-                    }
-                }
-            }
-        }
-        return results;
-    }
-
     $: {
         if (searchQuery.trim()) {
-            searchResults = performSearch(data, searchQuery);
+            searchResults = searchTree(data, searchQuery);
         } else {
             searchResults = [];
         }
     }
 
-        function handleSearchResultClick(content) {
+    function handleSearchResultClick(content) {
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
                 PasteAndHide();
@@ -550,26 +449,23 @@
             searchQuery = "";
         }).catch(err => console.error("Search copy failed:", err));
     }
-
 </script>
 
 <svelte:window 
     on:blur={() => handleBlur()} 
-    on:focus={() => handleFocus()}
 />
 
 <div class="app-container">
-    
     <div class="sticky-header">
         <div class="header-row">
-                        <button class="paste-toggle" class:active={autoPaste} on:click={() => { autoPaste = !autoPaste; }} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoPaste = !autoPaste; } }}>
-                            <span class="toggle-text">
-                                <span class="toggle-label">{autoPaste ? 'Auto Paste' : 'Not Paste'}</span>
-                            </span>
-                            <span class="toggle-indicator">
-                                <span class="toggle-dot"></span>
-                            </span>
-                        </button>
+            <button class="paste-toggle" class:active={autoPaste} on:click={() => { autoPaste = !autoPaste; }} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoPaste = !autoPaste; } }}>
+                <span class="toggle-text">
+                    <span class="toggle-label">{autoPaste ? 'Auto Paste' : 'Not Paste'}</span>
+                </span>
+                <span class="toggle-indicator">
+                    <span class="toggle-dot"></span>
+                </span>
+            </button>
             
             <div class="search-wrapper">
                 <input 
@@ -603,12 +499,12 @@
                 {#if searchResults.length > 0}
                     {#each searchResults as result}
                         <div class="search-result-item" 
-                        on:click={() => handleSearchResultClick(result.content)}
-                        on:keydown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleSearchResultClick(result.content);
-                            }
-                        }}
+                            on:click={() => handleSearchResultClick(result.content)}
+                            on:keydown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleSearchResultClick(result.content);
+                                }
+                            }}
                         >
                             <div class="result-path">{result.fullPath}</div>
                             <div class="result-name">{result.name}</div>
@@ -623,16 +519,13 @@
                 <div class="empty-state">No Items</div>
             {:else}
                 <ul class="tree-root">
-                    {#each data as item, index (index)}
-                                                <TreeItem 
-                            itemKey={index.toString()} 
-                            value={item} 
-                            {data} 
-                            {updateData} 
+                    {#each data as node (node.id)}
+                        <TreeItem 
+                            {node}
                             {expanded} 
                             {toggleExpand} 
-                            index={index} 
-                            showContextMenu={showContextMenu}
+                            {showContextMenu}
+                            onMoveNode={handleMoveNode}
                             {autoPaste}
                         />
                     {/each}
@@ -648,14 +541,14 @@
     style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; transform-origin: {globalContextMenu.flipX ? 'right' : 'left'} {globalContextMenu.flipY ? 'bottom' : 'top'};"
     in:scale={{ duration: 130, easing: iosElastic }} out:fade={{ duration: 60 }}
     on:contextmenu|preventDefault>
-    {#if globalContextMenu.isFolder}
+    {#if globalContextMenu.targetNode?.type === 'folder'}
         <div class="menu-item" on:click={addText} on:keydown={(e => {e.key === 'Enter' && addText()})}>New Text</div>
         <div class="menu-item" on:click={addDir} on:keydown={(e => {e.key === 'Enter' && addDir()})}>New Folder</div>
         <div class="menu-divider"></div>
         <div class="menu-item" on:click={editDir} on:keydown={(e => {e.key === 'Enter' && editDir()})}>Edit</div>
         <div class="menu-divider"></div>
     {/if}
-    {#if !globalContextMenu.isFolder}
+    {#if globalContextMenu.targetNode?.type === 'text'}
         <div class="menu-item" on:click={editText} on:keydown={(e => {})}>Edit</div>
         <div class="menu-divider"></div>
     {/if}
@@ -664,7 +557,7 @@
 {/if}
 
 {#if showDirInput}
-        <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+    <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
         <div class="modal-box compact" on:keyup|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <input type="text" bind:value={dirName} bind:this={dirInputRef} placeholder="Folder Name" 
                 on:click={(e) => e.stopPropagation()}
@@ -674,7 +567,7 @@
 {/if}
 
 {#if showTextInput}
-        <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+    <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
         <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <div class="input-group">
                 <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
@@ -699,13 +592,13 @@
 {/if}
 
 {#if showDeleteConfirm}
-        <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
+    <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
         <div class="modal-box compact confirm-modal" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
             <div class="confirm-content">
                 <div class="confirm-text">
                     <div class="confirm-title">Confirm Delete</div>
                     <div class="confirm-message">
-                        Are you sure?
+                        Are you sure you want to delete "{itemToDelete?.name}"?
                     </div>
                 </div>
             </div>
@@ -875,7 +768,7 @@
         font-size: 12px;
         color: #666;
         white-space: nowrap;
-                transition: color 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+        transition: color 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
     }
 
     .paste-toggle.active .toggle-label {
@@ -994,37 +887,6 @@
         margin: 0;
     }
 
-    :global(.tree-root ul) {
-        list-style: none;
-        padding-left: 16px;
-        margin: 0;
-        border-left: 1px solid rgba(0,0,0,0.05);
-    }
-
-    :global(.tree-root li) {
-        margin: 0;
-        padding: 0;
-    }
-
-    :global(.tree-item-content) {
-        display: flex;
-        align-items: center;
-        padding: 4px 8px;
-        cursor: pointer;
-        border-radius: 4px;
-        margin: 1px 4px;
-        color: #333;
-    }
-
-    :global(.tree-item-content:hover) {
-        background-color: rgba(0,0,0,0.04);
-    }
-    
-    :global(.tree-item-content.selected) {
-        background-color: #e0e7ff;
-        color: #3730a3;
-    }
-
     .context-menu {
         background: rgba(248, 250, 252, 0.84);
         -webkit-backdrop-filter: blur(22px) saturate(1.3);
@@ -1040,14 +902,14 @@
     }
 
     .menu-item {
-            padding: 4px 10px;
-            font-size: 13px;
-            border-radius: 4px;
-            cursor: pointer;
-            color: #333;
-            text-align: left;
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
+        padding: 4px 10px;
+        font-size: 13px;
+        border-radius: 4px;
+        cursor: pointer;
+        color: #333;
+        text-align: left;
+        transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
 
     .menu-item:hover {
         background: rgba(213, 235, 247, 0.78);
@@ -1057,6 +919,7 @@
 
     .menu-item.delete:hover {
         background: #ef4444;
+        color: #fff;
     }
     
     .menu-divider {
@@ -1151,7 +1014,7 @@
 
     .confirm-modal {
         min-width: 25px;
-        padding: 5px;
+        padding: 12px;
     }
 
     .confirm-content {
@@ -1176,6 +1039,7 @@
         font-size: 13px;
         color: #666;
         line-height: 1.5;
+        word-break: break-all;
     }
 
     .confirm-footer {
@@ -1230,11 +1094,11 @@
     }
 
     .search-result-item {
-            padding: 8px 15px;
-            border-bottom: 1px solid rgba(0,0,0,0.03);
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
-        }
+        padding: 8px 15px;
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
 
     .search-result-item:hover {
         background: rgba(224, 239, 248, 0.58);
@@ -1259,5 +1123,4 @@
         color: #999;
         font-size: 13px;
     }
-
 </style>

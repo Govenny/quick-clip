@@ -2,36 +2,34 @@
 	import { slide } from "svelte/transition";
 	import { quartOut } from 'svelte/easing';
 	import { PasteAndHide, HideAndRestore } from "../../wailsjs/go/main/App";
-	// import { LogInfo } from "../../wailsjs/runtime/runtime"; // 暂时注释，防报错
 
-	// props
-	export let itemKey; 
-	export let value; 
-	export let data; 
-	export let updateData; 
+	// props: 规范的树节点对象与全局操作回调
+	export let node;
 	export let expanded;
 	export let toggleExpand;
-		export let index; 
+	export let showContextMenu;
+	export let onMoveNode;
 	export let autoPaste = true;
 
 	let copied = false;
-	let dragOverIndex = null; // 这里存储的是 index，用来高亮当前组件
+	let dragOverThis = false;
 	let isDragging = false;
 	let dropType = null; // 'before', 'inside', 'after'
 
-    // 监听：一旦 itemKey 或 value 发生变化（说明列表更新了），强制重置拖拽状态
-    $: if (itemKey || value) {
-        isDragging = false;
-        dragOverIndex = null;
-        dropType = null;
-    }
+	// 一旦 node 变化，重置状态
+	$: if (node) {
+		isDragging = false;
+		dragOverThis = false;
+		dropType = null;
+	}
 
-		function copyToClipboard(text) {
-		const content = typeof text === "string" ? text : JSON.stringify(text);
+	function copyToClipboard(text) {
+		const content = typeof text === "string" ? text : JSON.stringify(text ?? "");
 		navigator.clipboard.writeText(content).then(() => {
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		}).catch((err) => console.error("Failed to copy: ", err));
+
 		if (autoPaste) {
 			PasteAndHide();
 		} else {
@@ -46,12 +44,12 @@
 		}
 	}
 
-	// --- 核心拖拽逻辑 ---
+	// --- 核心拖拽逻辑 (基于唯一 node.id) ---
 
-	function handleDragStart(e, idx) {
+	function handleDragStart(e) {
 		e.stopPropagation();
 		isDragging = true;
-		const dragInfo = { sourceKey: itemKey, sourceIndex: idx }; 
+		const dragInfo = { sourceId: node.id };
 		e.dataTransfer.setData("application/json", JSON.stringify(dragInfo));
 		e.dataTransfer.effectAllowed = "move";
 	}
@@ -59,307 +57,206 @@
 	function handleDragEnd(e) {
 		e.stopPropagation();
 		isDragging = false;
-		dragOverIndex = null;
+		dragOverThis = false;
 		dropType = null;
 	}
 
-	function handleDragOver(e, idx) {
+	function handleDragOver(e) {
 		e.preventDefault();
 		e.stopPropagation();
 
-		// [核心修复] currentTarget 现在是 button 或 div 行，高度固定且准确
 		const rect = e.currentTarget.getBoundingClientRect();
 		const relativeY = e.clientY - rect.top;
 		const height = rect.height;
 
-		// 分区域判定 (更灵敏的参数)
-		// 上 25% -> Before
-		// 下 25% -> After
-		// 中间 50% -> Folder ? Inside : After
-		if (relativeY < height * 0.25) {
-			dropType = 'before';
-		} else if (relativeY > height * 0.75) {
-			dropType = 'after';
-		} else {
-			const [key, val] = Object.entries(value)[0];
-			if (Array.isArray(val)) {
-				dropType = 'inside';
+		if (node.type === 'folder') {
+			// 上 25% -> Before, 下 25% -> After, 中间 50% -> Inside
+			if (relativeY < height * 0.25) {
+				dropType = 'before';
+			} else if (relativeY > height * 0.75) {
+				dropType = 'after';
 			} else {
-				dropType = 'after'; // 普通行中间区域也视为排序（插在后面）
+				dropType = 'inside';
+			}
+		} else {
+			// 普通文本只有 before 和 after
+			if (relativeY < height * 0.5) {
+				dropType = 'before';
+			} else {
+				dropType = 'after';
 			}
 		}
-		dragOverIndex = idx;
+		dragOverThis = true;
 	}
 
-	function handleDrop(e, targetIndex) {
+	function handleDrop(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		
+
 		const dragDataStr = e.dataTransfer.getData("application/json");
 		if (!dragDataStr) return;
-		const dragData = JSON.parse(dragDataStr);
-		const sourceKey = dragData.sourceKey;
 
-		// 缓存当前状态，因为 reset 后会被清空
+		let sourceId;
+		try {
+			const dragData = JSON.parse(dragDataStr);
+			sourceId = dragData.sourceId;
+		} catch (err) {
+			return;
+		}
+
 		const currentDropType = dropType;
-		
-		// 重置状态
-		dragOverIndex = null;
+
+		dragOverThis = false;
 		dropType = null;
 		isDragging = false;
 
-		// 获取当前项父路径
-		const pathParts = itemKey.split(".");
-		pathParts.pop();
-		const currentParentPath = pathParts.join(".");
-		
-		const [key, val] = Object.entries(value)[0];
-
-		if (currentDropType === 'inside') {
-			// 移入文件夹
-			const targetFolderPath = itemKey + "." + key;
-			// 防止自己拖进自己
-			if (sourceKey === targetFolderPath || targetFolderPath.startsWith(sourceKey + ".")) return;
-			moveItem(sourceKey, targetFolderPath, -1);
-		} else {
-			// 排序
-			let finalIndex = targetIndex;
-			if (currentDropType === 'after') finalIndex += 1;
-			moveItem(sourceKey, currentParentPath, finalIndex);
+		if (sourceId && sourceId !== node.id && currentDropType && onMoveNode) {
+			onMoveNode(sourceId, node.id, currentDropType);
 		}
 	}
 
-	function moveItem(srcKey, destParentPath, destIdx) {
-		let newData = JSON.parse(JSON.stringify(data));
-
-		// 1. 先解析源和目标的“父级引用”
-		const srcParts = srcKey.split(".");
-		const srcIdx = parseInt(srcParts.pop());
-		const srcParentPath = srcParts.join(".");
-
-		const srcParent = getByPath(newData, srcParentPath);
-		// 关键：在删除源之前，先拿到目标容器的引用
-		const destParentRaw = getByPath(newData, destParentPath);
-
-		if (!Array.isArray(srcParent) || !destParentRaw) return;
-
-		// 2. 兼容处理：确定目标容器数组
-		let destArray = destParentRaw;
-		if (!Array.isArray(destParentRaw)) {
-			// 如果指向的是 { "Folder": [] } 对象，取其内部数组
-			const lastKey = destParentPath.split(".").pop();
-			if (Array.isArray(destParentRaw[lastKey])) {
-				destArray = destParentRaw[lastKey];
-			} else {
-				// 尝试查找对象中唯一的数组值
-				const foundArray = Object.values(destParentRaw).find(v => Array.isArray(v));
-				if (foundArray) destArray = foundArray;
-			}
+	function handleContextMenu(e) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (showContextMenu) {
+			showContextMenu(e, node);
 		}
-
-		// 3. 执行移动：先取出，再删除
-		const [movedItem] = srcParent.splice(srcIdx, 1);
-
-		// 4. 处理同级移动的索引修正
-		let finalIdx = destIdx;
-		if (srcParent === destArray && destIdx > srcIdx) {
-			finalIdx--; 
-		}
-
-		// 5. 插入
-		if (finalIdx === -1) {
-			destArray.push(movedItem);
-		} else {
-			destArray.splice(finalIdx, 0, movedItem);
-		}
-
-		setTimeout(() => {
-			updateData(newData);
-		}, 0);
-	}
-
-	function getByPath(obj, path) {
-		if (path === "") return obj;
-		const parts = path.split(".");
-        let curr = obj;
-        for (const p of parts) {
-            if (curr && curr[p] !== undefined) {
-                curr = curr[p];
-            } else {
-                // 针对你的结构：数组项是对象 {key: val}
-                // 路径可能是 "0.Folder.1"
-                // 0 -> arr[0] -> {Folder: []}
-                // .Folder -> []
-                // .1 -> item
-                // 如果 get 失败，可能是因为遇到对象包裹
-                // 但通常 split 逻辑应该匹配数据结构
-                return undefined;
-            }
-        }
-        return curr;
-	}
-
-	export let showContextMenu;
-	function handleContextMenu(e, key, val, isFolder) {
-		showContextMenu(e, key, val, isFolder);
 	}
 </script>
 
-<!-- 
-    [修改点 1] li 不再负责拖拽事件和样式 
-    它只作为结构容器，这样可以避免高度计算错误
--->
 <li class="tree-item">
-	{#each Object.entries(value) as [key, val] (key)}
-		{#if Array.isArray(val)}
-			<!-- 
-                [修改点 2] 拖拽逻辑全部移到这个 button 上 
-                因为它是文件夹的“标题行”，高度固定 (~30px)
-            -->
-			<button
-				class="folder-btn"
-                draggable="true"
-                class:dragging={isDragging}
-                class:drop-before={dragOverIndex === index && dropType === 'before'}
-                class:drop-after={dragOverIndex === index && dropType === 'after'}
-                class:drop-inside={dragOverIndex === index && dropType === 'inside'}
-				on:click={() => toggleExpand(itemKey + "." + key)}
-                on:dragstart={(e) => handleDragStart(e, index)}
-                on:dragover={(e) => handleDragOver(e, index)}
-                on:dragleave={() => { dragOverIndex = null; dropType = null; }}
-                on:dragend={handleDragEnd}
-                on:drop={(e) => handleDrop(e, index)}
-				on:contextmenu={(e) => handleContextMenu(e, itemKey + "." + key, val, true)}
-			>
-				<span class="folder-icon" aria-hidden="true">
-					<span class="disclosure" class:expanded={expanded[itemKey + "." + key]}>›</span>
-					<span class="folder-mark"></span>
-				</span>
-				<span class="label">{key}</span>
-				<span class="drag-handle" title="拖拽排序">⋮⋮</span>
-			</button>
+	{#if node.type === 'folder'}
+		<!-- 文件夹节点行 -->
+		<button
+			class="folder-btn"
+			draggable="true"
+			class:dragging={isDragging}
+			class:drop-before={dragOverThis && dropType === 'before'}
+			class:drop-after={dragOverThis && dropType === 'after'}
+			class:drop-inside={dragOverThis && dropType === 'inside'}
+			on:click={() => toggleExpand(node.id)}
+			on:dragstart={handleDragStart}
+			on:dragover={handleDragOver}
+			on:dragleave={() => { dragOverThis = false; dropType = null; }}
+			on:dragend={handleDragEnd}
+			on:drop={handleDrop}
+			on:contextmenu={handleContextMenu}
+		>
+			<span class="folder-icon" aria-hidden="true">
+				<span class="disclosure" class:expanded={expanded[node.id]}>›</span>
+				<span class="folder-mark"></span>
+			</span>
+			<span class="label" title={node.name}>{node.name}</span>
+			<span class="drag-handle" title="拖拽排序">⋮⋮</span>
+		</button>
 
-			{#if expanded[itemKey + "." + key]}
-				<ul
-					class="nested-list"
-					transition:slide={{ duration: 280, easing: quartOut }}
-				>
-					{#each val as subItem, subIndex (subIndex)}
-												<svelte:self
-							itemKey={itemKey + "." + key + "." + subIndex}
-							value={subItem}
-							{data}
-							{updateData}
-							{expanded}
-							{toggleExpand}
-							index={subIndex}
-							showContextMenu={showContextMenu}
-							{autoPaste}
-						/>
-					{/each}
-				</ul>
-			{/if}
-		{:else}
-			<!-- 
-                [修改点 3] 普通文本行同理，添加完整的拖拽属性
-            -->
-			<div
-				class="item-line"
-                draggable="true"
-                class:dragging={isDragging}
-                class:drop-before={dragOverIndex === index && dropType === 'before'}
-                class:drop-after={dragOverIndex === index && dropType === 'after'}
-                on:dragstart={(e) => handleDragStart(e, index)}
-                on:dragover={(e) => handleDragOver(e, index)}
-                on:dragleave={() => { dragOverIndex = null; dropType = null; }}
-                on:dragend={handleDragEnd}
-                on:drop={(e) => handleDrop(e, index)}
-				on:click={() => copyToClipboard(val)}
-				on:keydown={(e) => handleKeyCopy(e, val)}
-				on:contextmenu={(e) => handleContextMenu(e, itemKey + "." + key, val, false)}
-				role="button"
-				tabindex="0"
-				title={typeof val === "string" ? val : ""}
+		{#if expanded[node.id] && node.children && node.children.length > 0}
+			<ul
+				class="nested-list"
+				transition:slide={{ duration: 280, easing: quartOut }}
 			>
-				<span class="item-key">{key}</span>
-				{#if typeof val === "string" && val.includes("\n")}
-					<span class="multiline-indicator" title={`Multiline content (${val.split("\n").length} lines)`}>{val.split("\n").length} lines</span>
-				{/if}
-				{#if copied}
-					<span class="copied-indicator">已复制</span>
-				{/if}
-				<span class="drag-handle" title="拖拽排序">⋮⋮</span>
-			</div>
+				{#each node.children as subNode (subNode.id)}
+					<svelte:self
+						node={subNode}
+						{expanded}
+						{toggleExpand}
+						{showContextMenu}
+						{onMoveNode}
+						{autoPaste}
+					/>
+				{/each}
+			</ul>
 		{/if}
-	{/each}
+	{:else}
+		<!-- 文本节点行 -->
+		<div
+			class="item-line"
+			draggable="true"
+			class:dragging={isDragging}
+			class:drop-before={dragOverThis && dropType === 'before'}
+			class:drop-after={dragOverThis && dropType === 'after'}
+			on:dragstart={handleDragStart}
+			on:dragover={handleDragOver}
+			on:dragleave={() => { dragOverThis = false; dropType = null; }}
+			on:dragend={handleDragEnd}
+			on:drop={handleDrop}
+			on:click={() => copyToClipboard(node.value)}
+			on:keydown={(e) => handleKeyCopy(e, node.value)}
+			on:contextmenu={handleContextMenu}
+			role="button"
+			tabindex="0"
+			title={typeof node.value === "string" ? node.value : ""}
+		>
+			<span class="item-key" title={node.name}>{node.name}</span>
+			{#if typeof node.value === "string" && node.value.includes("\n")}
+				<span class="multiline-indicator" title={`Multiline content (${node.value.split("\n").length} lines)`}>
+					{node.value.split("\n").length} lines
+				</span>
+			{/if}
+			{#if copied}
+				<span class="copied-indicator">已复制</span>
+			{/if}
+			<span class="drag-handle" title="拖拽排序">⋮⋮</span>
+		</div>
+	{/if}
 </li>
 
 <style>
-	/* 容器去掉 padding margin，只作为 wrapper */
 	.tree-item {
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
-    /* 
-       [修改点 4] 样式全部针对 folder-btn 和 item-line 
-       注意：position: relative 是必须的，为了定位蓝线 
-    */
-    .folder-btn,
-    .item-line {
-        position: relative; /* 关键 */
-        /* ... 其他原有样式保持不变 ... */
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        box-sizing: border-box;
-        padding: 3px 8px;
-        margin: 1px 0;
-        background: transparent;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 13px;
-        color: #333;
-        text-align: left;
-        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.045);
-        transition: background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
-    }
+	.folder-btn,
+	.item-line {
+		position: relative;
+		display: flex;
+		align-items: center;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+		padding: 3px 8px;
+		margin: 1px 0;
+		background: transparent;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 13px;
+		color: #333;
+		text-align: left;
+		box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.045);
+		transition: background-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+	}
 
-		/* 拖拽时的半透明 */
 	.dragging {
 		opacity: 0.4;
-        background: #f5f5f5;
-        transition: opacity 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), background-color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+		background: #f5f5f5;
+		transition: opacity 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), background-color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
 	}
 
-		/* 移入文件夹高亮 */
 	.folder-btn.drop-inside {
 		background-color: rgba(59, 130, 246, 0.2) !important;
-        color: #000;
-        transition: background-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+		color: #000;
+		transition: background-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
 	}
 
-	/* 排序指示线：上方 */
 	.folder-btn.drop-before::before,
-    .item-line.drop-before::before {
+	.item-line.drop-before::before {
 		content: "";
 		position: absolute;
-		top: -2px; /* 往外一点点，更清晰 */
+		top: -2px;
 		left: 0;
 		right: 0;
 		height: 2px;
 		background: #3b82f6;
 		z-index: 10;
-        pointer-events: none;
+		pointer-events: none;
 	}
 
-	/* 排序指示线：下方 */
 	.folder-btn.drop-after::after,
-    .item-line.drop-after::after {
+	.item-line.drop-after::after {
 		content: "";
 		position: absolute;
 		bottom: -2px;
@@ -368,10 +265,9 @@
 		height: 2px;
 		background: #3b82f6;
 		z-index: 10;
-        pointer-events: none;
+		pointer-events: none;
 	}
 
-	/* macOS 风格的轻量玻璃悬停态 */
 	.folder-btn:hover,
 	.item-line:hover {
 		background-color: rgba(235, 241, 248, 0.62);
@@ -384,7 +280,6 @@
 		color: #1f2937;
 	}
 
-    /* ... 其他图标、文字、复制提示样式保持不变 ... */
 	.folder-btn {
 		font-weight: 500;
 		color: #34404d;
@@ -507,6 +402,15 @@
 	}
 	.folder-btn:hover .drag-handle, .item-line:hover .drag-handle { color: #bbb; }
 	.drag-handle:hover { color: #666 !important; }
-		.copied-indicator { margin-left: auto; padding-left: 8px; color: #10b981; font-size: 11px; animation: fadeIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1); }
-	@keyframes fadeIn { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
+	.copied-indicator {
+		margin-left: auto;
+		padding-left: 8px;
+		color: #10b981;
+		font-size: 11px;
+		animation: fadeIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+	}
+	@keyframes fadeIn {
+		from { opacity: 0; transform: translateX(6px); }
+		to { opacity: 1; transform: translateX(0); }
+	}
 </style>
