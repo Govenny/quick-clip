@@ -482,11 +482,43 @@
             searchQuery = "";
         }).catch(err => console.error("Search copy failed:", err));
     }
+
+    function handleGlobalKeydown(e) {
+        if (e.key === 'Enter') {
+            if (showTextInput || showDirInput || showDeleteConfirm || showSettings) {
+                return;
+            }
+            if (document.activeElement && document.activeElement.classList.contains('paste-toggle')) {
+                return;
+            }
+            if (searchQuery.trim()) {
+                return;
+            }
+            // 仅当且仅当恰好只有 1 个常用胶囊时，敲回车直接点击胶囊
+            if (suggestedItems && suggestedItems.length === 1) {
+                e.preventDefault();
+                handleSuggestionClick(suggestedItems[0]);
+            }
+        }
+    }
+
+    function handleSearchKeydown(e) {
+        if (e.key === 'Enter') {
+            if (!searchQuery.trim() && suggestedItems && suggestedItems.length === 1) {
+                e.preventDefault();
+                handleSuggestionClick(suggestedItems[0]);
+            } else if (searchQuery.trim() && searchResults.length > 0) {
+                e.preventDefault();
+                handleSearchResultClick(searchResults[0]);
+            }
+        }
+    }
 </script>
 
 <svelte:window 
     on:blur={() => handleBlur()} 
     on:resize={() => updateTruncationStatus()}
+    on:keydown={handleGlobalKeydown}
 />
 
 <div class="app-container">
@@ -510,6 +542,7 @@
                         class="search-input" 
                         placeholder="Search keys..." 
                         bind:value={searchQuery}
+                        on:keydown={handleSearchKeydown}
                     >
                 </div>
 
@@ -553,6 +586,15 @@
                                     <line x1="16" y1="17" x2="8" y2="17"></line>
                                 </svg>
                                 <span class="chip-title">{item.name}</span>
+                                {#if suggestedItems.length === 1}
+                                    <span class="chip-badge">
+                                        <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="9 10 4 15 9 20"></polyline>
+                                            <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                                        </svg>
+                                        <span>Enter</span>
+                                    </span>
+                                {/if}
                             </button>
                         {/each}
                     </div>
@@ -808,6 +850,50 @@
         min-width: 0;
         text-align: left;
         line-height: var(--app-chip-height, 24px);
+    }
+
+    .chip-badge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 3.5px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 2.5px 6.5px;
+        margin-left: 6px;
+        color: #2b5074;
+        background: rgba(240, 246, 252, 0.94);
+        border: 1px solid rgba(140, 170, 200, 0.42);
+        border-bottom: 1.5px solid rgba(105, 140, 175, 0.65);
+        border-radius: 4px;
+        box-shadow:
+            0 1px 2px rgba(15, 23, 42, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        letter-spacing: 0.2px;
+        user-select: none;
+        transition: all 0.18s ease;
+    }
+
+    .chip-badge .enter-icon {
+        opacity: 0.75;
+        flex-shrink: 0;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .suggestion-chip:hover .chip-badge {
+        background: #ffffff;
+        color: #1a4266;
+        border-color: rgba(90, 130, 168, 0.55);
+        border-bottom-color: rgba(70, 115, 155, 0.8);
+        box-shadow:
+            0 2px 5px rgba(25, 45, 70, 0.09),
+            inset 0 1px 0 #ffffff;
+    }
+
+    .suggestion-chip:hover .chip-badge .enter-icon {
+        opacity: 1;
+        transform: translateX(-1px);
     }
 
     .search-wrapper {
