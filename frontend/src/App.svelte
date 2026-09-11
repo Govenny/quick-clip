@@ -1,6 +1,6 @@
 <script>
     import { onMount, tick, onDestroy } from 'svelte';
-    import { fade, fly, scale } from 'svelte/transition';
+    import { fade, fly, scale, slide } from 'svelte/transition';
 
     // iOS 弹性缓动: cubic-bezier(0.34, 1.3, 0.64, 1)
     function iosElastic(t) {
@@ -15,16 +15,32 @@
         return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
     }
     import { quartOut, cubicOut } from 'svelte/easing';
-    import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow} from '../wailsjs/go/main/App'; 
+    import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage} from '../wailsjs/go/main/App'; 
     import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
     import Setting from './components/Setting.svelte';
-    import { normalizeTree, deleteNodeById, moveNode, searchTree, generateId } from './utils/treeAdapter';
+    import { normalizeTree, deleteNodeById, moveNode, searchTree, generateId, findNodeById } from './utils/treeAdapter';
 
     let data = [];
     let expanded = {};
     let showMenu = false;
     let showSettings = false;
+    let suggestedItems = [];
+    let hoveredExpandedIdx = null;
+    let truncatedMap = {};
+
+    async function updateTruncationStatus() {
+        await tick();
+        const chips = document.querySelectorAll('.suggestion-chips .suggestion-chip');
+        const newMap = {};
+        chips.forEach((chip, idx) => {
+            const titleEl = chip.querySelector('.chip-title');
+            if (titleEl && titleEl.scrollWidth > titleEl.clientWidth + 1) {
+                newMap[idx] = true;
+            }
+        });
+        truncatedMap = newMap;
+    }
 
     // 粘贴模式开关: true=Auto Paste, false=Not Paste
     let autoPaste = true;
@@ -165,18 +181,46 @@
         }
     };
 
+    async function loadSuggestions() {
+        hoveredExpandedIdx = null;
+        try {
+            const topIds = await GetContextSuggestions();
+            if (topIds && topIds.length > 0) {
+                const found = [];
+                for (const id of topIds) {
+                    const node = findNodeById(data, id);
+                    if (node && node.type === 'text') {
+                        found.push(node);
+                    }
+                }
+                suggestedItems = found;
+                updateTruncationStatus();
+            } else {
+                suggestedItems = [];
+                truncatedMap = {};
+            }
+        } catch (err) {
+            suggestedItems = [];
+            truncatedMap = {};
+        }
+    }
+
     onMount(() => {
         document.addEventListener('click', handleGlobalClick);
         document.addEventListener('contextmenu', hideContextMenu);
 
         EventsOn("show-settings", settingsEventListener);
         EventsOn("update-content", contentEventListener);
+        EventsOn("window-shown", async () => {
+            await loadSuggestions();
+        });
     });
 
     onMount(async () => {
         try {
             const rawData = await GetContent();
             data = normalizeTree(rawData);
+            await loadSuggestions();
         } catch (error) {
             console.error('Failed to load content:', error);
         }
@@ -409,6 +453,7 @@
 
     // 焦点--------------------------------------------
     function handleBlur() {
+        hoveredExpandedIdx = null;
         setTimeout(() => {
             if (document.hasFocus()) {
                 return;
@@ -439,7 +484,54 @@
         }
     }
 
-    function handleSearchResultClick(content) {
+    function handleChipMouseEnter(event, idx) {
+        let isTruncated = truncatedMap[idx];
+        if (isTruncated === undefined) {
+            const btn = event.currentTarget;
+            const titleEl = btn.querySelector('.chip-title');
+            isTruncated = titleEl && titleEl.scrollWidth > titleEl.clientWidth + 1;
+        }
+
+        // 仅当文字在默认等分紧凑宽度下显示不完整（被截断）时才触发展开与压缩
+        if (isTruncated) {
+            hoveredExpandedIdx = idx;
+        } else {
+            hoveredExpandedIdx = null;
+        }
+    }
+
+    function handleChipMouseLeave() {
+        hoveredExpandedIdx = null;
+    }
+
+    function handleSuggestionClick(item) {
+        hoveredExpandedIdx = null;
+        if (!item) return;
+        if (item.id) {
+            RecordItemUsage(item.id);
+        }
+        const content = item.value || '';
+        navigator.clipboard.writeText(content).then(() => {
+            if (autoPaste) {
+                PasteAndHide();
+            } else {
+                HideAndRestore();
+            }
+        }).catch(err => console.error("Suggestion copy failed:", err));
+    }
+
+    function handleSearchKeydown(e) {
+        if (e.key === 'Enter' && !searchQuery.trim() && suggestedItems && suggestedItems.length > 0) {
+            e.preventDefault();
+            handleSuggestionClick(suggestedItems[0]);
+        }
+    }
+
+    function handleSearchResultClick(result) {
+        if (result && result.id) {
+            RecordItemUsage(result.id);
+        }
+        const content = typeof result === 'string' ? result : (result.content || '');
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
                 PasteAndHide();
@@ -453,6 +545,7 @@
 
 <svelte:window 
     on:blur={() => handleBlur()} 
+    on:resize={() => updateTruncationStatus()}
 />
 
 <div class="app-container">
@@ -471,8 +564,9 @@
                 <input 
                     type="search" 
                     class="search-input" 
-                    placeholder="Search keys..." 
+                    placeholder={suggestedItems && suggestedItems.length > 0 ? `回车快速填入: ${suggestedItems[0].name}` : "Search keys..."} 
                     bind:value={searchQuery}
+                    on:keydown={handleSearchKeydown}
                 >
             </div>
 
@@ -491,6 +585,32 @@
                 {/if}
             </div>
         </div>
+
+        {#if suggestedItems && suggestedItems.length > 0 && !searchQuery.trim()}
+            <div class="suggestion-bar" transition:slide={{ duration: 160, easing: cubicOut }}>
+                <span class="suggestion-tag">常用</span>
+                <div class="suggestion-chips" class:has-expanded={hoveredExpandedIdx !== null}>
+                    {#each suggestedItems as item, idx}
+                        <button 
+                            class="suggestion-chip" 
+                            class:top-pick={idx === 0}
+                            class:hover-expand={hoveredExpandedIdx === idx}
+                            on:mouseenter={(e) => handleChipMouseEnter(e, idx)}
+                            on:mouseleave={handleChipMouseLeave}
+                            on:focus={(e) => handleChipMouseEnter(e, idx)}
+                            on:blur={handleChipMouseLeave}
+                            on:click={() => handleSuggestionClick(item)}
+                            title={item.value || ''}
+                        >
+                            <span class="chip-title">{item.name}</span>
+                            {#if idx === 0}
+                                <span class="chip-badge">Enter</span>
+                            {/if}
+                        </button>
+                    {/each}
+                </div>
+            </div>
+        {/if}
     </div>
     
     <div class="content-scrollable">
@@ -645,6 +765,123 @@
         align-items: center;
         gap: 8px;
         height: 28px;
+    }
+
+    .suggestion-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 5px;
+        padding-top: 4px;
+        border-top: 1px dashed rgba(74, 96, 116, 0.12);
+        overflow: hidden;
+    }
+
+    .suggestion-tag {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 600;
+        color: #5c7080;
+        letter-spacing: 0.2px;
+        user-select: none;
+    }
+
+    .suggestion-chips {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        overflow: hidden;
+        flex: 1;
+        min-width: 0;
+        height: 22px;
+    }
+
+    .suggestion-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        background: rgba(255, 255, 255, 0.65);
+        border: 1px solid rgba(75, 98, 119, 0.15);
+        border-radius: 4px;
+        font-size: 11px;
+        color: #2c3e50;
+        cursor: pointer;
+        height: 22px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        /* 默认等分占比 1:1:1 */
+        flex: 1 1 0;
+        min-width: 28px;
+        /* iOS 弹簧贝塞尔曲线 (与 Auto Paste 保持一致) */
+        transition: flex 0.38s cubic-bezier(0.34, 1.4, 0.64, 1),
+                    background-color 0.2s ease,
+                    border-color 0.2s ease,
+                    box-shadow 0.2s ease,
+                    color 0.2s ease,
+                    padding 0.28s ease,
+                    opacity 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .suggestion-chip:hover {
+        background: rgba(235, 243, 252, 0.9);
+        border-color: rgba(59, 130, 246, 0.4);
+        color: #1d4ed8;
+    }
+
+    .suggestion-chip.top-pick {
+        background: rgba(239, 246, 255, 0.85);
+        border-color: rgba(59, 130, 246, 0.35);
+        color: #1e40af;
+        font-weight: 500;
+    }
+
+    .suggestion-chip.top-pick:hover {
+        background: rgba(219, 234, 254, 0.95);
+    }
+
+    /* 当存在展开项时，压缩未悬停的兄弟项 */
+    .suggestion-chips.has-expanded .suggestion-chip:not(.hover-expand) {
+        flex: 0.5 1 0;
+        padding: 2px 4px;
+        opacity: 0.82;
+    }
+
+    /* 截断项悬停展开：弹性拉伸，占据行内主要空间 */
+    .suggestion-chip.hover-expand {
+        flex: 3.5 1 0;
+        background: rgba(235, 243, 252, 0.95);
+        border-color: rgba(59, 130, 246, 0.55);
+        color: #1d4ed8;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.16);
+    }
+
+    .suggestion-chip.hover-expand.top-pick {
+        background: rgba(225, 239, 255, 0.98);
+        border-color: rgba(59, 130, 246, 0.65);
+        color: #1e40af;
+    }
+
+    .chip-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .chip-badge {
+        flex-shrink: 0;
+        font-size: 9px;
+        padding: 0 3px;
+        background: rgba(59, 130, 246, 0.15);
+        color: #2563eb;
+        border-radius: 2px;
+        font-weight: 600;
+        line-height: 12px;
     }
 
     .search-wrapper {

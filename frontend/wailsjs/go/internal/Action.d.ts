@@ -7,6 +7,8 @@ export function ExportJson(arg1:Array<any>,arg2:context.Context):Promise<void>;
 
 export function FindRealWailsWindow():Promise<win.HWND>;
 
+export function GetWindowContext(arg1:win.HWND):Promise<string|string>;
+
 export function Hide():Promise<void>;
 
 export function ImportJson(arg1:context.Context):Promise<Array<any>>;

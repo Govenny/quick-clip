@@ -256,6 +256,7 @@ export function searchTree(nodes, query, path = "") {
         } else if (node.type === 'text') {
             if (node.name.toLowerCase().includes(q)) {
                 results.push({
+                    id: node.id,
                     name: node.name,
                     content: node.value || '',
                     fullPath: path + node.name

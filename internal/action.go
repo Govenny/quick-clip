@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -38,6 +41,7 @@ var (
 	procMonitorFromPoint           = user32.NewProc("MonitorFromPoint")
 	procGetMonitorInfoW            = user32.NewProc("GetMonitorInfoW")
 	procGetAncestor                = user32.NewProc("GetAncestor")
+	procQueryFullProcessImageNameW = kernel32.NewProc("QueryFullProcessImageNameW")
 )
 
 const (
@@ -185,6 +189,115 @@ func (a *Action) Hide() {
 func (a *Action) RecordActiveWindow() (hwnd win.HWND) {
 	hwnd = win.GetForegroundWindow()
 	return
+}
+
+// GetWindowContext extracts the process name and window title from a given HWND.
+func (a *Action) GetWindowContext(hwnd win.HWND) (procName string, title string) {
+	if hwnd == 0 {
+		return "", ""
+	}
+
+	// 1. 获取窗口标题
+	var buf [512]uint16
+	win.GetWindowText(hwnd, &buf[0], 512)
+	title = syscall.UTF16ToString(buf[:])
+
+	// 2. 获取进程 ID
+	var pid uint32
+	win.GetWindowThreadProcessId(hwnd, &pid)
+	if pid == 0 {
+		return "", title
+	}
+
+	// 3. 打开进程获取可执行文件名 (PROCESS_QUERY_LIMITED_INFORMATION = 0x1000)
+	hProc, _, _ := procOpenProcess.Call(0x1000, 0, uintptr(pid))
+	if hProc != 0 {
+		defer procCloseHandle.Call(hProc)
+		var imgBuf [1024]uint16
+		var size uint32 = 1024
+		ret, _, _ := procQueryFullProcessImageNameW.Call(
+			hProc,
+			0,
+			uintptr(unsafe.Pointer(&imgBuf[0])),
+			uintptr(unsafe.Pointer(&size)),
+		)
+		if ret != 0 {
+			fullPath := syscall.UTF16ToString(imgBuf[:size])
+			procName = filepath.Base(fullPath)
+		}
+	}
+
+	return procName, title
+}
+
+// GenerateContextKey produces a clean, consistent scene fingerprint from process name and title.
+func GenerateContextKey(procName, title string) string {
+	procName = strings.ToLower(strings.TrimSpace(procName))
+	title = strings.TrimSpace(title)
+
+	// 常见浏览器集合
+	browsers := map[string]bool{
+		"chrome.exe":        true,
+		"msedge.exe":        true,
+		"firefox.exe":       true,
+		"brave.exe":         true,
+		"opera.exe":         true,
+		"360chrome.exe":     true,
+		"sogouexplorer.exe": true,
+		"qqbrowser.exe":     true,
+	}
+
+	if browsers[procName] {
+		cleanTitle := CleanBrowserTitle(title)
+		if cleanTitle != "" {
+			return procName + "::" + cleanTitle
+		}
+		return procName
+	}
+
+	// 通用桌面应用直接以进程名为主场景指纹
+	if procName != "" {
+		return procName
+	}
+	if title != "" {
+		return title
+	}
+	return "default"
+}
+
+var (
+	reUnreadPrefix   = regexp.MustCompile(`^[\(\[\{]\d+\+?[\)\]\}]\s*`)
+	reEdgeTabCountZh = regexp.MustCompile(`(?i)\s+(和另外|和其余)\s*\d+\s*个(页面|标签页).*$`)
+	reEdgeTabCountEn = regexp.MustCompile(`(?i)\s+and\s+\d+\s+other\s+tabs?.*$`)
+	reProfileSuffix  = regexp.MustCompile(`(?i)\s*-\s*(用户\s*\d+|个人|工作|Work|Profile\s*\d+|Default)\s*-\s*(Microsoft\s*Edge|Google\s*Chrome).*$`)
+	reBrandSuffix    = regexp.MustCompile(`(?i)\s*-\s*(Microsoft\s*Edge|Google\s*Chrome|Mozilla\s*Firefox|Brave|Opera|Vivaldi|360.+|QQ浏览器|搜狗.+).*$`)
+)
+
+// CleanBrowserTitle strips browser branding suffixes, tab count noise, and unread badge prefixes.
+func CleanBrowserTitle(title string) string {
+	title = strings.TrimSpace(title)
+
+	// 1. 剔除未读前缀，如 (3) 或 [5条]
+	title = reUnreadPrefix.ReplaceAllString(title, "")
+
+	// 2. 彻底剔除 Edge 垂直标签页的动态计数尾巴（如 " 和另外 11 个页面 - 用户1 - Microsoft Edge"）
+	title = reEdgeTabCountZh.ReplaceAllString(title, "")
+	title = reEdgeTabCountEn.ReplaceAllString(title, "")
+
+	// 3. 剔除带有用户配置文件名的浏览器后缀（如 " - 用户1 - Microsoft Edge"）
+	title = reProfileSuffix.ReplaceAllString(title, "")
+
+	// 4. 剔除常规浏览器品牌后缀（如 " - Google Chrome"）
+	title = reBrandSuffix.ReplaceAllString(title, "")
+
+	title = strings.TrimSpace(title)
+
+	// 5. 限制最大长度（避免过长的动态参数标题）
+	runes := []rune(title)
+	if len(runes) > 60 {
+		title = string(runes[:60])
+	}
+	return title
 }
 
 // RestoreFocus 根据句柄恢复窗口焦点

@@ -3,28 +3,32 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"os"
 	"path/filepath"
 	"quick-clip/internal"
+	"sync"
 	"time"
 
 	"github.com/tailscale/win"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.design/x/hotkey" // 注意：这个库通常要求在主线程初始化
 )
 
 // App struct
 type App struct {
-	ctx           context.Context
-	content       []any
-	keys          string
-	action        *internal.Action
-	isVisible     bool
-	lastHwnd      win.HWND
-	configManager *internal.ConfigManager
-	config        *internal.Config
-	dataPath      string
-	storageReady  bool
+	ctx               context.Context
+	content           []any
+	keys              string
+	action            *internal.Action
+	isVisible         bool
+	lastHwnd          win.HWND
+	configManager     *internal.ConfigManager
+	config            *internal.Config
+	dataPath          string
+	storageReady      bool
+	statsManager      *internal.StatsManager
+	contextMu         sync.RWMutex
+	currentContextKey string
 }
 
 // NewApp creates a new App application struct
@@ -33,6 +37,7 @@ func NewApp(action *internal.Action, configManager *internal.ConfigManager, conf
 	appConfigDir := filepath.Join(configDir, "quick-clip", "data") // 替换为你的应用名
 	os.MkdirAll(appConfigDir, 0755)
 	dataPath := filepath.Join(appConfigDir, "resource.json")
+	statsManager := internal.NewStatsManager(appConfigDir)
 
 	return &App{
 		keys:          "11112222111122221111222211112222",
@@ -41,6 +46,7 @@ func NewApp(action *internal.Action, configManager *internal.ConfigManager, conf
 		configManager: configManager,
 		config:        config,
 		dataPath:      dataPath,
+		statsManager:  statsManager,
 	}
 }
 
@@ -140,8 +146,17 @@ func (a *App) ToggleWindow() {
 		a.action.Hide()
 	} else {
 		a.lastHwnd = a.action.RecordActiveWindow()
+		procName, title := a.action.GetWindowContext(a.lastHwnd)
+		cKey := internal.GenerateContextKey(procName, title)
+		a.contextMu.Lock()
+		a.currentContextKey = cKey
+		a.contextMu.Unlock()
+
 		a.isVisible = true
 		a.action.ShowNoActivate()
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "window-shown", cKey)
+		}
 	}
 }
 
@@ -223,4 +238,34 @@ func (a *App) GetDataPath() string {
 
 func (a *App) GetKeys() string {
 	return a.keys
+}
+
+// GetContextSuggestions returns the top recommended item IDs for the current active window scene.
+func (a *App) GetContextSuggestions() []string {
+	a.contextMu.RLock()
+	cKey := a.currentContextKey
+	a.contextMu.RUnlock()
+
+	if a.statsManager == nil || cKey == "" {
+		return []string{}
+	}
+	res := a.statsManager.GetTopItemIds(cKey, 3)
+	if res == nil {
+		return []string{}
+	}
+	return res
+}
+
+// RecordItemUsage records usage of an item under the current context.
+func (a *App) RecordItemUsage(itemId string) {
+	if a.statsManager == nil || itemId == "" {
+		return
+	}
+	a.contextMu.RLock()
+	cKey := a.currentContextKey
+	a.contextMu.RUnlock()
+
+	if cKey != "" {
+		a.statsManager.RecordUsage(cKey, itemId)
+	}
 }

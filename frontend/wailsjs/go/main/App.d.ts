@@ -10,6 +10,8 @@ export function GetConfig():Promise<internal.Config>;
 
 export function GetContent():Promise<Array<any>>;
 
+export function GetContextSuggestions():Promise<Array<string>>;
+
 export function GetDataPath():Promise<string>;
 
 export function GetKeys():Promise<string>;
@@ -19,6 +21,8 @@ export function HideAndRestore():Promise<void>;
 export function HideWindow():Promise<void>;
 
 export function PasteAndHide():Promise<void>;
+
+export function RecordItemUsage(arg1:string):Promise<void>;
 
 export function RegisterGlobalHotkey(arg1:string,arg2:string):Promise<void>;
 

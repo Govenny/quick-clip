@@ -1,7 +1,7 @@
 <script>
 	import { slide } from "svelte/transition";
 	import { quartOut } from 'svelte/easing';
-	import { PasteAndHide, HideAndRestore } from "../../wailsjs/go/main/App";
+	import { PasteAndHide, HideAndRestore, RecordItemUsage } from "../../wailsjs/go/main/App";
 
 	// props: 规范的树节点对象与全局操作回调
 	export let node;
@@ -24,6 +24,9 @@
 	}
 
 	function copyToClipboard(text) {
+		if (node && node.id) {
+			RecordItemUsage(node.id);
+		}
 		const content = typeof text === "string" ? text : JSON.stringify(text ?? "");
 		navigator.clipboard.writeText(content).then(() => {
 			copied = true;
@@ -143,8 +146,19 @@
 			on:contextmenu={handleContextMenu}
 		>
 			<span class="folder-icon" aria-hidden="true">
-				<span class="disclosure" class:expanded={expanded[node.id]}>›</span>
-				<span class="folder-mark"></span>
+				<svg class="chevron" class:expanded={expanded[node.id]} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+					<polyline points="9 18 15 12 9 6"></polyline>
+				</svg>
+				{#if expanded[node.id]}
+					<svg class="folder-svg open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+						<polygon points="2 10 22 10 19 21 5 21"></polygon>
+					</svg>
+				{:else}
+					<svg class="folder-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+					</svg>
+				{/if}
 			</span>
 			<span class="label" title={node.name}>{node.name}</span>
 			<span class="drag-handle" title="拖拽排序">⋮⋮</span>
@@ -296,56 +310,40 @@
 	.folder-icon {
 		display: inline-flex;
 		align-items: center;
-		width: 32px;
-		margin-right: 4px;
-		color: #738294;
+		gap: 3px;
+		margin-right: 6px;
 		flex-shrink: 0;
 	}
-	.disclosure {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
+	.chevron {
 		width: 12px;
-		font-size: 16px;
-		line-height: 1;
+		height: 12px;
+		color: #7b8e9f;
+		flex-shrink: 0;
 		transform-origin: center;
-		transition: transform 0.18s ease, color 0.18s ease;
+		transition: transform 0.2s cubic-bezier(0.34, 1.3, 0.64, 1), color 0.18s ease;
 	}
-	.disclosure.expanded {
+	.chevron.expanded {
 		transform: rotate(90deg);
-		color: #387da8;
+		color: #2563eb;
 	}
-	.folder-mark {
-		position: relative;
-		display: inline-block;
-		width: 13px;
-		height: 9px;
-		margin-left: 2px;
-		border: 1px solid rgba(51, 126, 171, 0.72);
-		border-radius: 2px;
-		background: rgba(209, 235, 248, 0.42);
-		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-		transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+	.folder-svg {
+		width: 15px;
+		height: 15px;
+		color: #3b82f6;
+		fill: rgba(59, 130, 246, 0.16);
+		flex-shrink: 0;
+		transition: color 0.18s ease, fill 0.18s ease;
 	}
-	.folder-mark::before {
-		content: "";
-		position: absolute;
-		left: 1px;
-		top: -4px;
-		width: 6px;
-		height: 3px;
-		border: 1px solid rgba(51, 126, 171, 0.72);
-		border-bottom: 0;
-		border-radius: 2px 2px 0 0;
-		background: rgba(225, 243, 252, 0.82);
+	.folder-svg.open {
+		color: #2563eb;
+		fill: rgba(37, 99, 235, 0.24);
 	}
-	.folder-btn:hover .disclosure {
+	.folder-btn:hover .chevron {
 		color: #256b98;
 	}
-	.folder-btn:hover .folder-mark {
-		border-color: rgba(31, 132, 190, 0.9);
-		background: rgba(190, 229, 247, 0.58);
-		box-shadow: 0 0 6px rgba(55, 164, 214, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.48);
+	.folder-btn:hover .folder-svg {
+		color: #1d4ed8;
+		fill: rgba(59, 130, 246, 0.28);
 	}
 	.label {
 		flex: 1;
@@ -356,6 +354,7 @@
 		color: #2d4050;
 		font-weight: 600;
 		letter-spacing: 0;
+		line-height: 1.4;
 	}
 	.item-key {
 		flex: 1;

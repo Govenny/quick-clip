@@ -10,6 +10,10 @@ export function FindRealWailsWindow() {
   return window['go']['internal']['Action']['FindRealWailsWindow']();
 }
 
+export function GetWindowContext(arg1) {
+  return window['go']['internal']['Action']['GetWindowContext'](arg1);
+}
+
 export function Hide() {
   return window['go']['internal']['Action']['Hide']();
 }

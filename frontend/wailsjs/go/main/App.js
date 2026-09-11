@@ -18,6 +18,10 @@ export function GetContent() {
   return window['go']['main']['App']['GetContent']();
 }
 
+export function GetContextSuggestions() {
+  return window['go']['main']['App']['GetContextSuggestions']();
+}
+
 export function GetDataPath() {
   return window['go']['main']['App']['GetDataPath']();
 }
@@ -36,6 +40,10 @@ export function HideWindow() {
 
 export function PasteAndHide() {
   return window['go']['main']['App']['PasteAndHide']();
+}
+
+export function RecordItemUsage(arg1) {
+  return window['go']['main']['App']['RecordItemUsage'](arg1);
 }
 
 export function RegisterGlobalHotkey(arg1, arg2) {
