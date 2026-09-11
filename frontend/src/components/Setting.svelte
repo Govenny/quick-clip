@@ -23,6 +23,7 @@ import { createEventDispatcher, onMount } from 'svelte';
         config.shortcuts.wakeUp = [selectedMod,selectedKey];
         LogInfo("新快捷键:" + config.shortcuts.wakeUp);
         RegisterGlobalHotkey(config.shortcuts.wakeUp[0], config.shortcuts.wakeUp[1]);
+        UpdateConfig(config);
     }
 
     function updateOpacity() {
@@ -128,7 +129,7 @@ import { createEventDispatcher, onMount } from 'svelte';
                         <div class="setting-group" in:fade={{duration:150}}>
                             <div class="setting-row">
                                 <div class="setting-info">
-                                    <label>开机自启</label>
+                                    <span class="setting-title">开机自启</span>
                                     <span class="desc">登录时自动启动 Quick-Clip</span>
                                 </div>
                                 <!-- iOS 风格开关 -->
@@ -147,7 +148,7 @@ import { createEventDispatcher, onMount } from 'svelte';
                         <div class="setting-group" in:fade={{duration:150}}>
                             <div class="setting-row">
                                 <div class="setting-info">
-                                    <label>唤醒快捷键</label>
+                                    <span class="setting-title">唤醒快捷键</span>
                                     <span class="desc">组合键唤醒主窗口</span>
                                 </div>
                                 
@@ -172,7 +173,7 @@ import { createEventDispatcher, onMount } from 'svelte';
 
                             <div class="setting-row">
                                 <div class="setting-info">
-                                    <label>粘贴等待时间</label>
+                                    <span class="setting-title">粘贴等待时间</span>
                                     <span class="desc">粘贴操作前等待的时间,应对卡顿,默认100ms</span>
                                 </div>
 
@@ -192,7 +193,7 @@ import { createEventDispatcher, onMount } from 'svelte';
                         <div class="setting-group" in:fade={{duration:150}}>
                             <div class="setting-row">
                                 <div class="setting-info">
-                                    <label>窗口透明度</label>
+                                    <span class="setting-title">窗口透明度</span>
                                 </div>
                                 <div class="range-wrapper">
                                     <input type="range" min="25" max="255" step="1" 
@@ -343,7 +344,7 @@ import { createEventDispatcher, onMount } from 'svelte';
         flex-direction: column;
     }
 
-    .setting-info label { font-weight: 500; color: #2e3d4a; margin-bottom: 2px; }
+    .setting-info .setting-title { font-weight: 500; color: #2e3d4a; margin-bottom: 2px; }
     .setting-info .desc { color: #71808e; font-size: 10px; }
 
     .content-footer {

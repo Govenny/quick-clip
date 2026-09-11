@@ -29,6 +29,10 @@ type App struct {
 	statsManager      *internal.StatsManager
 	contextMu         sync.RWMutex
 	currentContextKey string
+
+	hotkeyMu       sync.Mutex
+	currentHotkey  *hotkey.Hotkey
+	hotkeyStopChan chan struct{}
 }
 
 // NewApp creates a new App application struct
@@ -68,31 +72,47 @@ func (a *App) startup(ctx context.Context) {
 	a.RegisterGlobalHotkey(a.config.Shortcuts.WakeUp[0], a.config.Shortcuts.WakeUp[1])
 	a.action.SetTransparency(uint8(a.config.Appearance.Opacity))
 
-	// 注册窗口句柄
+	// 注册窗口句柄：使用自适应 50ms 轮询快速捕获窗口并隐藏，避免 1s 阶梯睡眠
 	go func() {
-		for i := 0; i < 10; i++ {
-			time.Sleep(1000 * time.Millisecond)
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		timeout := time.After(15 * time.Second)
 
-			hwnd := a.action.FindRealWailsWindow()
-			if hwnd != 0 {
-				rootHwnd := internal.GetRootHWND(hwnd)
-				a.action.SetSelfHwnd(rootHwnd)
-				a.action.SetOnResized(a.persistWindowSize)
-				a.action.InstallResizeTracker(rootHwnd)
+		for {
+			select {
+			case <-timeout:
+				fmt.Println("Warning: Wails window handle discovery timed out")
+				return
+			case <-ticker.C:
+				hwnd := a.action.FindRealWailsWindow()
+				if hwnd != 0 {
+					rootHwnd := internal.GetRootHWND(hwnd)
+					a.action.SetSelfHwnd(rootHwnd)
+					a.action.SetOnResized(a.persistWindowSize)
+					a.action.InstallResizeTracker(rootHwnd)
 
-				// 初始化完成后，先用原生方式藏起来
-				// 这样 Wails 认为窗口是“显示”的，WebView2 会继续工作
-				// 但用户看不见
-				a.action.Hide()
-				break
+					// 初始化完成后立即隐藏
+					a.action.Hide()
+					return
+				}
 			}
 		}
 	}()
-
 }
 
 // shutdown is called when the app is about to close
 func (a *App) shutdown(ctx context.Context) {
+	// 1. 安全注销全局热键与后台监听 goroutine
+	a.hotkeyMu.Lock()
+	a.unregisterHotkeyLocked()
+	a.hotkeyMu.Unlock()
+
+	// 2. 刷新未持久化的统计数据
+	if a.statsManager != nil {
+		_ = a.statsManager.Flush()
+	}
+
+	// 3. 持久化密码本内容
 	if !a.storageReady {
 		return
 	}
@@ -117,26 +137,58 @@ func (a *App) SaveContent(data []any) {
 	}
 }
 
+func (a *App) unregisterHotkeyLocked() {
+	if a.hotkeyStopChan != nil {
+		close(a.hotkeyStopChan)
+		a.hotkeyStopChan = nil
+	}
+	if a.currentHotkey != nil {
+		_ = a.currentHotkey.Unregister()
+		a.currentHotkey = nil
+	}
+}
+
+// RegisterGlobalHotkey 注册全局呼出热键，具备完整的生命周期管理（支持多次重新注册且不泄露 goroutine）
 func (a *App) RegisterGlobalHotkey(key1 string, key2 string) {
-	go func() {
-		// 从映射中获取 Modifier 和 Key
-		modifier, ok1 := internal.HotKeyMap[key1].(hotkey.Modifier)
-		key, ok2 := internal.HotKeyMap[key2].(hotkey.Key)
-		if !ok1 || !ok2 {
-			return
-		}
+	a.hotkeyMu.Lock()
+	defer a.hotkeyMu.Unlock()
 
-		hk := hotkey.New([]hotkey.Modifier{modifier}, key)
-		err := hk.Register()
-		if err != nil {
-			return
-		}
+	// 1. 先反注册并停止旧的监听 goroutine
+	a.unregisterHotkeyLocked()
 
-		// 监听热键事件
-		for range hk.Keydown() {
-			a.ToggleWindow()
+	// 2. 从映射中获取 Modifier 和 Key
+	modifier, ok1 := internal.HotKeyMap[key1].(hotkey.Modifier)
+	key, ok2 := internal.HotKeyMap[key2].(hotkey.Key)
+	if !ok1 || !ok2 {
+		fmt.Printf("无效的热键配置: %s + %s\n", key1, key2)
+		return
+	}
+
+	hk := hotkey.New([]hotkey.Modifier{modifier}, key)
+	err := hk.Register()
+	if err != nil {
+		fmt.Printf("注册热键 %s+%s 失败: %v\n", key1, key2, err)
+		return
+	}
+
+	a.currentHotkey = hk
+	stopChan := make(chan struct{})
+	a.hotkeyStopChan = stopChan
+
+	// 3. 启动受管理的事件监听循环
+	go func(hk *hotkey.Hotkey, stop <-chan struct{}) {
+		for {
+			select {
+			case <-stop:
+				return
+			case _, ok := <-hk.Keydown():
+				if !ok {
+					return
+				}
+				a.ToggleWindow()
+			}
 		}
-	}()
+	}(hk, stopChan)
 }
 
 // 你的热键触发逻辑

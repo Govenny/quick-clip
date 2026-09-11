@@ -21,7 +21,9 @@ type StatsManager struct {
 	mu       sync.RWMutex
 	filePath string
 	// map[contextKey]map[itemId]UsageRecord
-	data map[string]map[string]UsageRecord
+	data      map[string]map[string]UsageRecord
+	saveMu    sync.Mutex
+	saveTimer *time.Timer
 }
 
 // NewStatsManager initializes a StatsManager loading from the specified data directory.
@@ -48,12 +50,59 @@ func (sm *StatsManager) load() {
 	}
 }
 
-func (sm *StatsManager) save() error {
+// Flush synchronously writes the current stats to disk atomically.
+func (sm *StatsManager) Flush() error {
+	sm.saveMu.Lock()
+	defer sm.saveMu.Unlock()
+
+	if sm.saveTimer != nil {
+		sm.saveTimer.Stop()
+		sm.saveTimer = nil
+	}
+
+	sm.mu.RLock()
 	raw, err := json.MarshalIndent(sm.data, "", "  ")
+	sm.mu.RUnlock()
+
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(sm.filePath, raw, 0644)
+
+	dir := filepath.Dir(sm.filePath)
+	tmpFile, err := os.CreateTemp(dir, ".stats-*.tmp")
+	if err != nil {
+		return os.WriteFile(sm.filePath, raw, 0644)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(raw); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+
+	_ = os.Remove(sm.filePath)
+	if err := os.Rename(tmpPath, sm.filePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return os.WriteFile(sm.filePath, raw, 0644)
+	}
+	return nil
+}
+
+func (sm *StatsManager) scheduleSave() {
+	sm.saveMu.Lock()
+	defer sm.saveMu.Unlock()
+
+	if sm.saveTimer != nil {
+		sm.saveTimer.Stop()
+	}
+	sm.saveTimer = time.AfterFunc(300*time.Millisecond, func() {
+		_ = sm.Flush()
+	})
 }
 
 // RecordUsage records an item access under the given contextKey.
@@ -63,8 +112,6 @@ func (sm *StatsManager) RecordUsage(contextKey, itemId string) {
 	}
 
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	if sm.data[contextKey] == nil {
 		sm.data[contextKey] = make(map[string]UsageRecord)
 	}
@@ -73,13 +120,10 @@ func (sm *StatsManager) RecordUsage(contextKey, itemId string) {
 	rec.Count++
 	rec.LastUsed = time.Now().Unix()
 	sm.data[contextKey][itemId] = rec
+	sm.mu.Unlock()
 
-	// Save asynchronously
-	go func() {
-		sm.mu.RLock()
-		defer sm.mu.RUnlock()
-		_ = sm.save()
-	}()
+	// Debounced atomic save to prevent concurrent write collisions
+	sm.scheduleSave()
 }
 
 type itemScore struct {
