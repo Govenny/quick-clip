@@ -146,16 +146,16 @@
 			on:contextmenu={handleContextMenu}
 		>
 			<span class="folder-icon" aria-hidden="true">
-				<svg class="chevron" class:expanded={expanded[node.id]} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+				<svg class="chevron" class:expanded={expanded[node.id]} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
 					<polyline points="9 18 15 12 9 6"></polyline>
 				</svg>
 				{#if expanded[node.id]}
-					<svg class="folder-svg open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+					<svg class="folder-svg open" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
 						<polygon points="2 10 22 10 19 21 5 21"></polygon>
 					</svg>
 				{:else}
-					<svg class="folder-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+					<svg class="folder-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
 					</svg>
 				{/if}
@@ -251,8 +251,8 @@
 	}
 
 	.folder-btn.drop-inside {
-		background-color: rgba(59, 130, 246, 0.2) !important;
-		color: #000;
+		background-color: rgba(71, 94, 117, 0.15) !important;
+		color: #1e293b;
 		transition: background-color 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
 	}
 
@@ -264,7 +264,7 @@
 		left: 0;
 		right: 0;
 		height: 2px;
-		background: #3b82f6;
+		background: #5b7a9c;
 		z-index: 10;
 		pointer-events: none;
 	}
@@ -277,35 +277,35 @@
 		left: 0;
 		right: 0;
 		height: 2px;
-		background: #3b82f6;
+		background: #5b7a9c;
 		z-index: 10;
 		pointer-events: none;
 	}
 
 	.folder-btn:hover,
 	.item-line:hover {
-		background-color: rgba(230, 240, 250, 0.85);
+		background-color: rgba(232, 239, 247, 0.75);
 		box-shadow:
 			inset 0 0 0 1px rgba(255, 255, 255, 0.9),
-			inset 0 -1px 0 rgba(91, 108, 128, 0.12),
-			0 2px 6px rgba(31, 41, 55, 0.08);
+			inset 0 -1px 0 rgba(91, 108, 128, 0.08),
+			0 2px 6px rgba(31, 41, 55, 0.06);
 		color: #1f2937;
 	}
 
 	.folder-btn {
 		font-weight: 500;
-		color: #34404d;
-		background: rgba(235, 244, 250, 0.3);
+		color: #334155;
+		background: rgba(241, 245, 249, 0.32);
 		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.58),
-			inset 0 -1px 0 rgba(56, 99, 135, 0.09);
+			inset 0 1px 0 rgba(255, 255, 255, 0.65),
+			inset 0 -1px 0 rgba(71, 85, 105, 0.06);
 	}
 	.folder-btn:hover {
-		background-color: rgba(225, 239, 249, 0.7);
+		background-color: rgba(228, 236, 245, 0.65);
 		box-shadow:
 			inset 0 0 0 1px rgba(255, 255, 255, 0.88),
-			inset 0 -1px 0 rgba(52, 116, 163, 0.15),
-			0 2px 8px rgba(38, 73, 99, 0.1);
+			inset 0 -1px 0 rgba(71, 85, 105, 0.1),
+			0 2px 8px rgba(30, 41, 59, 0.06);
 	}
 	.folder-icon {
 		display: inline-flex;
@@ -317,33 +317,33 @@
 	.chevron {
 		width: 12px;
 		height: 12px;
-		color: #7b8e9f;
+		color: #8c9dae;
 		flex-shrink: 0;
 		transform-origin: center;
 		transition: transform 0.2s cubic-bezier(0.34, 1.3, 0.64, 1), color 0.18s ease;
 	}
 	.chevron.expanded {
 		transform: rotate(90deg);
-		color: #2563eb;
+		color: #475e75;
 	}
 	.folder-svg {
 		width: 15px;
 		height: 15px;
-		color: #3b82f6;
-		fill: rgba(59, 130, 246, 0.16);
+		color: #5a6f84;
+		fill: rgba(90, 111, 132, 0.08);
 		flex-shrink: 0;
 		transition: color 0.18s ease, fill 0.18s ease;
 	}
 	.folder-svg.open {
-		color: #2563eb;
-		fill: rgba(37, 99, 235, 0.24);
+		color: #475e75;
+		fill: rgba(71, 94, 117, 0.14);
 	}
 	.folder-btn:hover .chevron {
-		color: #256b98;
+		color: #3a5168;
 	}
 	.folder-btn:hover .folder-svg {
-		color: #1d4ed8;
-		fill: rgba(59, 130, 246, 0.28);
+		color: #3a5168;
+		fill: rgba(71, 94, 117, 0.18);
 	}
 	.label {
 		flex: 1;
@@ -351,8 +351,8 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		margin-right: 8px;
-		color: #2d4050;
-		font-weight: 600;
+		color: #334155;
+		font-weight: 550;
 		letter-spacing: 0;
 		line-height: 1.4;
 	}
@@ -371,10 +371,10 @@
 		flex: 0 0 auto;
 		margin-right: 6px;
 		padding: 1px 5px;
-		border: 1px solid rgba(79, 135, 169, 0.16);
+		border: 1px solid rgba(148, 163, 184, 0.22);
 		border-radius: 3px;
-		background: rgba(220, 239, 249, 0.42);
-		color: #4b7894;
+		background: rgba(226, 232, 240, 0.5);
+		color: #475569;
 		font-size: 10px;
 		font-weight: 500;
 		line-height: 14px;

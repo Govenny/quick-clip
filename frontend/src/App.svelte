@@ -520,13 +520,6 @@
         }).catch(err => console.error("Suggestion copy failed:", err));
     }
 
-    function handleSearchKeydown(e) {
-        if (e.key === 'Enter' && !searchQuery.trim() && suggestedItems && suggestedItems.length > 0) {
-            e.preventDefault();
-            handleSuggestionClick(suggestedItems[0]);
-        }
-    }
-
     function handleSearchResultClick(result) {
         if (result && result.id) {
             RecordItemUsage(result.id);
@@ -564,9 +557,8 @@
                 <input 
                     type="search" 
                     class="search-input" 
-                    placeholder={suggestedItems && suggestedItems.length > 0 ? `回车快速填入: ${suggestedItems[0].name}` : "Search keys..."} 
+                    placeholder="Search keys..." 
                     bind:value={searchQuery}
-                    on:keydown={handleSearchKeydown}
                 >
             </div>
 
@@ -593,7 +585,6 @@
                     {#each suggestedItems as item, idx}
                         <button 
                             class="suggestion-chip" 
-                            class:top-pick={idx === 0}
                             class:hover-expand={hoveredExpandedIdx === idx}
                             on:mouseenter={(e) => handleChipMouseEnter(e, idx)}
                             on:mouseleave={handleChipMouseLeave}
@@ -602,10 +593,13 @@
                             on:click={() => handleSuggestionClick(item)}
                             title={item.value || ''}
                         >
+                            <svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
                             <span class="chip-title">{item.name}</span>
-                            {#if idx === 0}
-                                <span class="chip-badge">Enter</span>
-                            {/if}
                         </button>
                     {/each}
                 </div>
@@ -770,19 +764,27 @@
     .suggestion-bar {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-top: 5px;
-        padding-top: 4px;
-        border-top: 1px dashed rgba(74, 96, 116, 0.12);
+        gap: 7px;
+        margin-top: 6px;
+        padding-top: 5px;
+        border-top: 1px solid rgba(71, 85, 105, 0.09);
         overflow: hidden;
     }
 
     .suggestion-tag {
         flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 20px;
+        padding: 0 6px;
         font-size: 11px;
         font-weight: 600;
-        color: #5c7080;
-        letter-spacing: 0.2px;
+        color: #475569;
+        background: rgba(71, 85, 105, 0.07);
+        border: 1px solid rgba(71, 85, 105, 0.12);
+        border-radius: 5px;
+        letter-spacing: 0.3px;
         user-select: none;
     }
 
@@ -793,27 +795,33 @@
         overflow: hidden;
         flex: 1;
         min-width: 0;
-        height: 22px;
+        height: 24px;
     }
 
     .suggestion-chip {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 2px 6px;
-        background: rgba(255, 255, 255, 0.65);
-        border: 1px solid rgba(75, 98, 119, 0.15);
-        border-radius: 4px;
-        font-size: 11px;
-        color: #2c3e50;
+        gap: 5px;
+        padding: 0 8px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 550;
+        color: #1e293b;
         cursor: pointer;
-        height: 22px;
+        height: 24px;
         box-sizing: border-box;
         white-space: nowrap;
         overflow: hidden;
         /* 默认等分占比 1:1:1 */
         flex: 1 1 0;
         min-width: 28px;
+        /* 拟物磨砂质感：高光顶缘 + 板岩微柔光阴影，不靠明艳高饱和颜色，自然浮现立体层次 */
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.95),
+            0 1px 2px rgba(15, 23, 42, 0.04),
+            0 2px 4px rgba(15, 23, 42, 0.02);
         /* iOS 弹簧贝塞尔曲线 (与 Auto Paste 保持一致) */
         transition: flex 0.38s cubic-bezier(0.34, 1.4, 0.64, 1),
                     background-color 0.2s ease,
@@ -822,46 +830,54 @@
                     color 0.2s ease,
                     padding 0.28s ease,
                     opacity 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .chip-icon {
+        flex-shrink: 0;
+        color: #64748b;
+        opacity: 0.85;
+        transition: color 0.18s ease, opacity 0.18s ease;
     }
 
     .suggestion-chip:hover {
-        background: rgba(235, 243, 252, 0.9);
-        border-color: rgba(59, 130, 246, 0.4);
-        color: #1d4ed8;
+        background: rgba(255, 255, 255, 0.94);
+        border-color: rgba(100, 116, 139, 0.36);
+        color: #0f172a;
+        box-shadow:
+            inset 0 1px 0 #ffffff,
+            0 2px 6px rgba(15, 23, 42, 0.07),
+            0 0 0 1px rgba(148, 163, 184, 0.1);
     }
 
-    .suggestion-chip.top-pick {
-        background: rgba(239, 246, 255, 0.85);
-        border-color: rgba(59, 130, 246, 0.35);
-        color: #1e40af;
-        font-weight: 500;
-    }
-
-    .suggestion-chip.top-pick:hover {
-        background: rgba(219, 234, 254, 0.95);
+    .suggestion-chip:hover .chip-icon {
+        color: #334155;
+        opacity: 1;
     }
 
     /* 当存在展开项时，压缩未悬停的兄弟项 */
     .suggestion-chips.has-expanded .suggestion-chip:not(.hover-expand) {
         flex: 0.5 1 0;
-        padding: 2px 4px;
-        opacity: 0.82;
+        padding: 0 7px;
+        opacity: 0.65;
+        background: rgba(255, 255, 255, 0.45);
+        border-color: rgba(148, 163, 184, 0.2);
     }
 
-    /* 截断项悬停展开：弹性拉伸，占据行内主要空间 */
+    /* 截断项悬停展开：纯净白玉浮雕微光 */
     .suggestion-chip.hover-expand {
         flex: 3.5 1 0;
-        background: rgba(235, 243, 252, 0.95);
-        border-color: rgba(59, 130, 246, 0.55);
-        color: #1d4ed8;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.16);
+        background: #ffffff;
+        border-color: rgba(71, 85, 105, 0.42);
+        color: #0f172a;
+        box-shadow:
+            inset 0 1px 0 #ffffff,
+            0 3px 10px rgba(15, 23, 42, 0.09),
+            0 0 0 1px rgba(71, 85, 105, 0.12);
     }
 
-    .suggestion-chip.hover-expand.top-pick {
-        background: rgba(225, 239, 255, 0.98);
-        border-color: rgba(59, 130, 246, 0.65);
-        color: #1e40af;
+    .suggestion-chip.hover-expand .chip-icon {
+        color: #1e293b;
+        opacity: 1;
     }
 
     .chip-title {
@@ -871,17 +887,7 @@
         flex: 1 1 auto;
         min-width: 0;
         text-align: left;
-    }
-
-    .chip-badge {
-        flex-shrink: 0;
-        font-size: 9px;
-        padding: 0 3px;
-        background: rgba(59, 130, 246, 0.15);
-        color: #2563eb;
-        border-radius: 2px;
-        font-weight: 600;
-        line-height: 12px;
+        line-height: 24px;
     }
 
     .search-wrapper {
