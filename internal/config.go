@@ -66,8 +66,8 @@ func (m *ConfigManager) Load() (*Config, error) {
 				Opacity: 250,
 			},
 			WindowConfig{
-				Width:  256,
-				Height: 384,
+				Width:  420,
+				Height: 580,
 			},
 		}, nil
 	}

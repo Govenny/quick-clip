@@ -244,10 +244,16 @@ func (a *App) EnterSettingsMode() {
 	a.action.SetResizeSuppressed(false)
 }
 
-// 退出设置模式：变回紧凑小窗口
+// 退出设置模式：变回主窗口尺寸
 func (a *App) ExitSettingsMode() {
 	a.action.SetResizeSuppressed(true)
-	a.action.SetSizeNative(320, 480)
+	width := 420
+	height := 580
+	if a.config != nil && a.config.Window.Width > 0 && a.config.Window.Height > 0 {
+		width = a.config.Window.Width
+		height = a.config.Window.Height
+	}
+	a.action.SetSizeNative(width, height)
 	a.action.SetResizeSuppressed(false)
 }
 

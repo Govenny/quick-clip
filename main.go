@@ -50,17 +50,19 @@ func main() {
 	// Create application with options
 	windowWidth := config.Window.Width
 	if windowWidth <= 0 {
-		windowWidth = 256
+		windowWidth = 420
 	}
 	windowHeight := config.Window.Height
 	if windowHeight <= 0 {
-		windowHeight = 384
+		windowHeight = 580
 	}
 
 	err := wails.Run(&options.App{
-		Title:  "quick-clip",
-		Width:  windowWidth,
-		Height: windowHeight,
+		Title:     "quick-clip",
+		Width:     windowWidth,
+		Height:    windowHeight,
+		MinWidth:  380,
+		MinHeight: 400,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
