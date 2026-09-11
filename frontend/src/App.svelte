@@ -1,6 +1,7 @@
 <script>
     import { onMount, tick, onDestroy } from 'svelte';
-    import { fade, fly, scale, slide } from 'svelte/transition';
+    import { fade, fly, slide } from 'svelte/transition';
+    import { cubicOut } from 'svelte/easing';
 
     // iOS 弹性缓动: cubic-bezier(0.34, 1.3, 0.64, 1)
     function iosElastic(t) {
@@ -14,11 +15,14 @@
         }
         return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
     }
-    import { quartOut, cubicOut } from 'svelte/easing';
     import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage} from '../wailsjs/go/main/App'; 
     import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
     import Setting from './components/Setting.svelte';
+    import ContextMenu from './components/ContextMenu.svelte';
+    import TextModal from './components/TextModal.svelte';
+    import DirModal from './components/DirModal.svelte';
+    import ConfirmModal from './components/ConfirmModal.svelte';
     import { normalizeTree, deleteNodeById, moveNode, searchTree, generateId, findNodeById } from './utils/treeAdapter';
 
     let data = [];
@@ -45,22 +49,20 @@
     // 粘贴模式开关: true=Auto Paste, false=Not Paste
     let autoPaste = true;
 
-    // 编辑模式
-    let isEditMode = false;
+    // 当前编辑/父级节点
     let editingNode = null;
     let targetFolderNode = null;
 
-    // 添加目录
+    // 目录弹窗状态
     let showDirInput = false;
-    let dirName = "";
-    let dirInputRef; 
+    let isEditDirMode = false;
+    let dirModalName = "";
 
-    // 添加文本
+    // 文本弹窗状态
     let showTextInput = false;
-    let titleName = "";
-    let titleInputRef;
-    let textName = "";
-    let textInputRef;
+    let isEditTextMode = false;
+    let textModalTitle = "";
+    let textModalValue = "";
 
     // 删除确认弹窗
     let showDeleteConfirm = false;
@@ -244,75 +246,42 @@
     }
 
     function addText() {
-        isEditMode = false;
+        isEditTextMode = false;
         editingNode = null;
         targetFolderNode = (globalContextMenu.targetNode && globalContextMenu.targetNode.type === 'folder')
             ? globalContextMenu.targetNode
             : null;
-
+        textModalTitle = "";
+        textModalValue = "";
         showTextInput = true;
-        titleName = "";
-        textName = "";
         showMenu = false;
         hideContextMenu();
-
-        tick().then(() => {
-            if (titleInputRef) {
-                titleInputRef.focus();
-            }
-        });
     }
 
-    // 表单验证：名称与内容不能为空，点号已完全允许
-    $: isFormValid = titleName.trim() !== "" && textName.trim() !== "";
-
-    function handleKeyDown(event, isTitleInput) {
-        const { key } = event;
-
-        if (key === 'Escape') {
-            cancelAddText();
-            return;
-        }
-
-        if (key === 'Enter') {
-            if (isTitleInput) {
-                event.preventDefault();
-                textInputRef?.focus();
-                return;
-            }
-
-            // 内容框使用 Shift+Enter 换行；Enter 保存
-            if (event.shiftKey) {
-                return;
-            }
-
-            event.preventDefault();
-            if (isFormValid) {
-                confirmAddText();
-            }
-        } else if (key === 'Tab' && isTitleInput && event.shiftKey === false) {
-            event.preventDefault();
-            textInputRef?.focus();
-        }
+    function editText() {
+        if (!globalContextMenu.targetNode) return;
+        isEditTextMode = true;
+        editingNode = globalContextMenu.targetNode;
+        targetFolderNode = null;
+        textModalTitle = editingNode.name;
+        textModalValue = editingNode.value || "";
+        showTextInput = true;
+        showMenu = false;
+        hideContextMenu();
     }
 
-    function confirmAddText() {
-        const trimmedTitle = titleName.trim();
-        if (!trimmedTitle || !textName) {
-            alert("请完善输入");
-            return;
-        }
-
-        if (isEditMode && editingNode) {
-            editingNode.name = trimmedTitle;
-            editingNode.value = textName;
+    function handleTextSubmit(event) {
+        const { title, value } = event.detail;
+        if (isEditTextMode && editingNode) {
+            editingNode.name = title;
+            editingNode.value = value;
             updateData([...data]);
         } else {
             const newNode = {
                 id: generateId(),
-                name: trimmedTitle,
+                name: title,
                 type: 'text',
-                value: textName
+                value: value
             };
 
             if (targetFolderNode && targetFolderNode.type === 'folder') {
@@ -327,72 +296,49 @@
             }
             updateData([...data]);
         }
-
-        cancelAddText();
+        closeTextModal();
     }
 
-    function cancelAddText() {
-        titleName = "";
-        textName = "";
+    function closeTextModal() {
         showTextInput = false;
-        isEditMode = false;
+        isEditTextMode = false;
         editingNode = null;
         targetFolderNode = null;
         cleanGlobalContextMenu();
     }
 
-    function editText() {
-        if (!globalContextMenu.targetNode) return;
-        isEditMode = true;
-        editingNode = globalContextMenu.targetNode;
-        targetFolderNode = null;
-        showTextInput = true;
-        titleName = editingNode.name;
-        textName = editingNode.value || "";
-        
-        showMenu = false;
-        hideContextMenu();
-
-        tick().then(() => titleInputRef?.focus());
-    }
-
-    $: if (showTextInput && titleInputRef) {
-        setTimeout(() => titleInputRef.focus(), 0);
-    }
-
     function addDir() {
-        isEditMode = false;
+        isEditDirMode = false;
         editingNode = null;
         targetFolderNode = (globalContextMenu.targetNode && globalContextMenu.targetNode.type === 'folder')
             ? globalContextMenu.targetNode
             : null;
-
+        dirModalName = "";
         showDirInput = true;
-        dirName = "";
         showMenu = false;
         hideContextMenu();
-
-        tick().then(() => {
-            if (dirInputRef) {
-                dirInputRef.focus();
-            }
-        });
     }
 
-    function confirmAddDir() {
-        const newDirName = dirName.trim();
-        if (!newDirName) {
-            alert("名称无效");
-            return;
-        }
+    function editDir() {
+        if (!globalContextMenu.targetNode) return;
+        isEditDirMode = true;
+        editingNode = globalContextMenu.targetNode;
+        targetFolderNode = null;
+        dirModalName = editingNode.name;
+        showDirInput = true;
+        showMenu = false;
+        hideContextMenu();
+    }
 
-        if (isEditMode && editingNode) {
-            editingNode.name = newDirName;
+    function handleDirSubmit(event) {
+        const { name } = event.detail;
+        if (isEditDirMode && editingNode) {
+            editingNode.name = name;
             updateData([...data]);
         } else {
             const newNode = {
                 id: generateId(),
-                name: newDirName,
+                name: name,
                 type: 'folder',
                 children: []
             };
@@ -409,31 +355,15 @@
             }
             updateData([...data]);
         }
-
-        cancelAddDir();
+        closeDirModal();
     }
 
-    function cancelAddDir() {
+    function closeDirModal() {
         showDirInput = false;
-        dirName = "";
-        isEditMode = false;
+        isEditDirMode = false;
         editingNode = null;
         targetFolderNode = null;
         cleanGlobalContextMenu();
-    }
-
-    function editDir() {
-        if (!globalContextMenu.targetNode) return;
-        isEditMode = true;
-        editingNode = globalContextMenu.targetNode;
-        targetFolderNode = null;
-        showDirInput = true;
-        dirName = editingNode.name;
-        
-        showMenu = false;
-        hideContextMenu();
-
-        tick().then(() => dirInputRef?.focus());
     }
 
     function cancelMenu() {
@@ -649,80 +579,55 @@
     </div>
 </div>
 
-{#if globalContextMenu.visible}
-  <div 
-    class="context-menu"
-    style="position: fixed; top: {globalContextMenu.y}px; left: {globalContextMenu.x}px; transform-origin: {globalContextMenu.flipX ? 'right' : 'left'} {globalContextMenu.flipY ? 'bottom' : 'top'};"
-    in:scale={{ duration: 130, easing: iosElastic }} out:fade={{ duration: 60 }}
-    on:contextmenu|preventDefault>
-    {#if globalContextMenu.targetNode?.type === 'folder'}
-        <div class="menu-item" on:click={addText} on:keydown={(e => {e.key === 'Enter' && addText()})}>New Text</div>
-        <div class="menu-item" on:click={addDir} on:keydown={(e => {e.key === 'Enter' && addDir()})}>New Folder</div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" on:click={editDir} on:keydown={(e => {e.key === 'Enter' && editDir()})}>Edit</div>
-        <div class="menu-divider"></div>
-    {/if}
-    {#if globalContextMenu.targetNode?.type === 'text'}
-        <div class="menu-item" on:click={editText} on:keydown={(e => {})}>Edit</div>
-        <div class="menu-divider"></div>
-    {/if}
-    <div class="menu-item delete" on:click={deleteItem} on:keydown={(e => {})}>Delete</div>
-  </div>
-{/if}
+<ContextMenu 
+    visible={globalContextMenu.visible}
+    x={globalContextMenu.x}
+    y={globalContextMenu.y}
+    flipX={globalContextMenu.flipX}
+    flipY={globalContextMenu.flipY}
+    targetNode={globalContextMenu.targetNode}
+    on:addText={addText}
+    on:addDir={addDir}
+    on:editText={editText}
+    on:editDir={editDir}
+    on:delete={deleteItem}
+/>
 
-{#if showDirInput}
-    <div class="modal-overlay" on:keyup={cancelAddDir} on:click={cancelAddDir} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
-        <div class="modal-box compact" on:keyup|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
-            <input type="text" bind:value={dirName} bind:this={dirInputRef} placeholder="Folder Name" 
-                on:click={(e) => e.stopPropagation()}
-                on:keydown={(e) => { if (e.key === 'Enter') confirmAddDir(); if (e.key === 'Escape') cancelAddDir(); }}/>
-        </div>
-    </div>
-{/if}
+<DirModal 
+    visible={showDirInput}
+    isEdit={isEditDirMode}
+    initialName={dirModalName}
+    on:submit={handleDirSubmit}
+    on:cancel={closeDirModal}
+/>
 
-{#if showTextInput}
-    <div class="modal-overlay" on:keydown={cancelAddText} on:click={cancelAddText} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
-        <div class="modal-box" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
-            <div class="input-group">
-                <input type="text" class="title-input" bind:value={titleName} bind:this={titleInputRef} placeholder="Key / Name" on:keydown={(e) => handleKeyDown(e, true)}/>
-                <textarea class="value-input" bind:value={textName} bind:this={textInputRef} placeholder="Value / Command" spellcheck="false" on:keydown={(e) => handleKeyDown(e, false)}></textarea>
-            </div>
-            <div class="modal-footer">
-                <span class="hint">Shift+Enter for newline / Enter to save</span>
-            </div>
-        </div>
-    </div>
-{/if}
+<TextModal 
+    visible={showTextInput}
+    isEdit={isEditTextMode}
+    initialTitle={textModalTitle}
+    initialValue={textModalValue}
+    on:submit={handleTextSubmit}
+    on:cancel={closeTextModal}
+/>
 
 {#if showSettings}
     <Setting 
-        on:close={
-        () => {
+        on:close={() => {
             showSettings = false;
             ExitSettingsMode();
-        }
-    } 
+        }} 
     />
 {/if}
 
-{#if showDeleteConfirm}
-    <div class="modal-overlay" on:click={cancelDelete} on:keydown={cancelDelete} in:fade={{ duration: 130, easing: quartOut }} out:fade={{ duration: 80 }}>
-        <div class="modal-box compact confirm-modal" on:keydown|stopPropagation on:click|stopPropagation in:fly={{ y: 15, duration: 230, easing: cubicOut }} out:fly={{ y: 10, duration: 100 }}>
-            <div class="confirm-content">
-                <div class="confirm-text">
-                    <div class="confirm-title">Confirm Delete</div>
-                    <div class="confirm-message">
-                        Are you sure you want to delete "{itemToDelete?.name}"?
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer confirm-footer">
-                <button class="btn btn-cancel" on:click={cancelDelete}>Cancel</button>
-                <button class="btn btn-delete" on:click={confirmDeleteItem}>Delete</button>
-            </div>
-        </div>
-    </div>
-{/if}
+<ConfirmModal 
+    visible={showDeleteConfirm}
+    title="Confirm Delete"
+    message={itemToDelete ? `Are you sure you want to delete "${itemToDelete.name}"?` : ''}
+    confirmText="Delete"
+    cancelText="Cancel"
+    on:confirm={confirmDeleteItem}
+    on:cancel={cancelDelete}
+/>
 
 <style>
     .app-container {
@@ -1130,205 +1035,7 @@
         margin: 0;
     }
 
-    .context-menu {
-        background: rgba(248, 250, 252, 0.84);
-        -webkit-backdrop-filter: blur(22px) saturate(1.3);
-        backdrop-filter: blur(22px) saturate(1.3);
-        border: 1px solid rgba(255, 255, 255, 0.74);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.68),
-            0 10px 26px rgba(25, 41, 55, 0.18);
-        border-radius: 7px;
-        padding: 4px;
-        min-width: 128px;
-        z-index: 9999;
-    }
 
-    .menu-item {
-        padding: 4px 10px;
-        font-size: 13px;
-        border-radius: 4px;
-        cursor: pointer;
-        color: #333;
-        text-align: left;
-        transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .menu-item:hover {
-        background: rgba(213, 235, 247, 0.78);
-        color: #215f82;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.56);
-    }
-
-    .menu-item.delete:hover {
-        background: #ef4444;
-        color: #fff;
-    }
-    
-    .menu-divider {
-        height: 1px;
-        background: rgba(0,0,0,0.1);
-        margin: 4px 0;
-    }
-
-    .modal-overlay {
-        position: fixed;
-        top: 0;left: 0;right: 0;bottom: 0;
-        background: rgba(215, 225, 233, 0.28);
-        -webkit-backdrop-filter: blur(8px) saturate(1.12);
-        backdrop-filter: blur(8px) saturate(1.12);
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding-top: 80px;
-        z-index: 9998;
-    }
-
-    .modal-box {
-        background: rgba(249, 251, 252, 0.86);
-        -webkit-backdrop-filter: blur(26px) saturate(1.25);
-        backdrop-filter: blur(26px) saturate(1.25);
-        width: 380px;
-        border-radius: 8px;
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.72),
-            0 14px 38px rgba(24, 39, 52, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.72);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .modal-box.compact {
-        width: 300px;
-        padding: 8px;
-    }
-
-    .input-group {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .input-group input,
-    .input-group textarea {
-        box-sizing: border-box;
-        border: none;
-        padding: 12px 16px;
-        font-size: 14px;
-        outline: none;
-        width: 100%;
-        background: transparent;
-        color: #293b4a;
-        transition: background-color 0.18s ease;
-    }
-
-    .input-group textarea {
-        min-height: 112px;
-        max-height: 220px;
-        resize: vertical;
-        line-height: 1.45;
-        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-
-    .title-input {
-        border-bottom: 1px solid #eee !important;
-        font-weight: 500;
-    }
-
-    .modal-box.compact input {
-        border: 1px solid #eee;
-        border-radius: 4px;
-        padding: 6px 10px;
-        background: #f9f9f9;
-    }
-    .modal-box.compact input:focus {
-        background: #fff;
-        border-color: #3b82f6;
-    }
-
-    .modal-footer {
-        background: #f9fafb;
-        padding: 6px 10px;
-        text-align: right;
-        border-top: 1px solid #f0f0f0;
-    }
-
-    .confirm-modal {
-        min-width: 25px;
-        padding: 12px;
-    }
-
-    .confirm-content {
-        display: flex;
-        align-items: flex-start;
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-
-    .confirm-text {
-        flex: 1;
-    }
-
-    .confirm-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 8px;
-    }
-
-    .confirm-message {
-        font-size: 13px;
-        color: #666;
-        line-height: 1.5;
-        word-break: break-all;
-    }
-
-    .confirm-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        padding: 0;
-        background: transparent;
-        border-top: none;
-    }
-
-    .btn {
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-        border: 1px solid transparent;
-        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .btn-cancel {
-        background: #f5f5f5;
-        color: #666;
-        border-color: #ddd;
-    }
-
-    .btn-cancel:hover {
-        background: #e5e5e5;
-        color: #333;
-    }
-
-    .btn-delete {
-        background: #fee2e2;
-        color: #dc2626;
-        border-color: #fecaca;
-    }
-
-    .btn-delete:hover {
-        background: #fecaca;
-        color: #b91c1c;
-    }
-
-    .hint {
-        font-size: 11px;
-        color: #999;
-    }
 
     .search-results-overlay {
         background: rgba(255, 255, 255, 0.16);
