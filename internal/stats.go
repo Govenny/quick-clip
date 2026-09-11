@@ -126,6 +126,24 @@ func (sm *StatsManager) RecordUsage(contextKey, itemId string) {
 	sm.scheduleSave()
 }
 
+// RemoveItemStats removes all usage records for the specified itemId across all contexts.
+func (sm *StatsManager) RemoveItemStats(itemId string) {
+	if itemId == "" {
+		return
+	}
+
+	sm.mu.Lock()
+	for cKey, records := range sm.data {
+		delete(records, itemId)
+		if len(records) == 0 {
+			delete(sm.data, cKey)
+		}
+	}
+	sm.mu.Unlock()
+
+	sm.scheduleSave()
+}
+
 type itemScore struct {
 	itemId   string
 	count    int

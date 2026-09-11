@@ -15,7 +15,7 @@
         }
         return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
     }
-    import { EnterSettingsMode, GetConfig, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage} from '../wailsjs/go/main/App'; 
+    import { EnterSettingsMode, GetConfig, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage, RemoveItemUsage } from '../wailsjs/go/main/App'; 
     import { applyFontSizeLevel } from './fontSize';
     import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
@@ -65,9 +65,26 @@
     let textModalTitle = "";
     let textModalValue = "";
 
+    // 胶囊快捷键配置 (胶囊 1, 2, 3)
+    let capsuleShortcuts = [
+        ["Alt", "1"],
+        ["Alt", "2"],
+        ["Alt", "3"]
+    ];
+
+    function syncCapsuleShortcutsFromConfig(cfg) {
+        if (cfg && cfg.shortcuts) {
+            if (cfg.shortcuts.capsule1 && cfg.shortcuts.capsule1[1]) capsuleShortcuts[0] = cfg.shortcuts.capsule1;
+            if (cfg.shortcuts.capsule2 && cfg.shortcuts.capsule2[1]) capsuleShortcuts[1] = cfg.shortcuts.capsule2;
+            if (cfg.shortcuts.capsule3 && cfg.shortcuts.capsule3[1]) capsuleShortcuts[2] = cfg.shortcuts.capsule3;
+            capsuleShortcuts = [...capsuleShortcuts];
+        }
+    }
+
     // 删除确认弹窗
     let showDeleteConfirm = false;
     let itemToDelete = null;
+    let deleteType = 'item'; // 'item' | 'capsule'
 
     // 全局上下文菜单
     let globalContextMenu = {
@@ -75,6 +92,7 @@
         x: 0,
         y: 0,
         targetNode: null,
+        isCapsule: false,
         flipX: false,
         flipY: false
     };
@@ -85,6 +103,7 @@
             x: 0,
             y: 0,
             targetNode: null,
+            isCapsule: false,
             flipX: false,
             flipY: false
         };
@@ -121,6 +140,35 @@
             x: flipX ? e.pageX - menuWidth : e.pageX,
             y: flipY ? e.pageY - menuHeight : e.pageY,
             targetNode: node,
+            isCapsule: false,
+            flipX,
+            flipY
+        };
+    }
+
+    function handleCapsuleContextMenu(e, item) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const menuWidth = 128;
+        const itemHeight = 28;
+        const dividerHeight = 9;
+        const padding = 8;
+        // 3 项 (从常用移除, Edit, Delete) + 2 分割线
+        const menuHeight = 3 * itemHeight + 2 * dividerHeight + padding;
+
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
+
+        const flipX = e.pageX + menuWidth > winW;
+        const flipY = e.pageY + menuHeight > winH;
+
+        globalContextMenu = {
+            visible: true,
+            x: flipX ? e.pageX - menuWidth : e.pageX,
+            y: flipY ? e.pageY - menuHeight : e.pageY,
+            targetNode: item,
+            isCapsule: true,
             flipX,
             flipY
         };
@@ -140,22 +188,47 @@
         }
     }
 
-    function deleteItem() {
+    function removeCapsule() {
         if (!globalContextMenu.targetNode) return;
         itemToDelete = globalContextMenu.targetNode;
+        deleteType = 'capsule';
         showDeleteConfirm = true;
         hideContextMenu();
     }
 
-    function confirmDeleteItem() {
+    function deleteItem() {
+        if (!globalContextMenu.targetNode) return;
+        itemToDelete = globalContextMenu.targetNode;
+        deleteType = 'item';
+        showDeleteConfirm = true;
+        hideContextMenu();
+    }
+
+    async function confirmDeleteItem() {
         if (!itemToDelete) return;
 
-        try {
-            deleteNodeById(data, itemToDelete.id);
-            updateData([...data]);
-            cancelDelete();
-        } catch (err) {
-            console.error("删除失败", err);
+        if (deleteType === 'capsule') {
+            try {
+                await RemoveItemUsage(itemToDelete.id);
+                suggestedItems = suggestedItems.filter(i => i.id !== itemToDelete.id);
+                await tick();
+                updateTruncationStatus();
+                cancelDelete();
+            } catch (err) {
+                console.error("移除胶囊失败", err);
+            }
+        } else {
+            try {
+                deleteNodeById(data, itemToDelete.id);
+                updateData([...data]);
+                await RemoveItemUsage(itemToDelete.id);
+                suggestedItems = suggestedItems.filter(i => i.id !== itemToDelete.id);
+                await tick();
+                updateTruncationStatus();
+                cancelDelete();
+            } catch (err) {
+                console.error("删除失败", err);
+            }
         }
     }
 
@@ -181,6 +254,10 @@
     async function closeSettings() {
         showSettings = false;
         ExitSettingsMode();
+        try {
+            const cfg = await GetConfig();
+            syncCapsuleShortcutsFromConfig(cfg);
+        } catch (e) {}
         await tick();
         updateTruncationStatus();
     }
@@ -235,6 +312,7 @@
     onMount(async () => {
         try {
             const cfg = await GetConfig();
+            syncCapsuleShortcutsFromConfig(cfg);
             if (cfg && cfg.appearance && cfg.appearance.fontSizeLevel) {
                 applyFontSizeLevel(cfg.appearance.fontSizeLevel);
             }
@@ -433,18 +511,8 @@
     }
 
     function handleChipMouseEnter(event, idx) {
-        let isTruncated = truncatedMap[idx];
-        if (isTruncated === undefined) {
-            const btn = event.currentTarget;
-            const titleEl = btn.querySelector('.chip-title');
-            isTruncated = titleEl && titleEl.scrollWidth > titleEl.clientWidth + 1;
-        }
-
-        // 仅当文字在默认等分紧凑宽度下显示不完整（被截断）时才触发展开与压缩
-        if (isTruncated) {
+        if (suggestedItems && suggestedItems.length > 1) {
             hoveredExpandedIdx = idx;
-        } else {
-            hoveredExpandedIdx = null;
         }
     }
 
@@ -483,21 +551,78 @@
         }).catch(err => console.error("Search copy failed:", err));
     }
 
+    function getCapsuleBadgeLabel(idx) {
+        const shortcut = capsuleShortcuts[idx];
+        if (!shortcut || !Array.isArray(shortcut)) return '';
+        const [mod, key] = shortcut;
+        if (!mod || mod === 'None') {
+            return key;
+        }
+        return `${mod}+${key}`;
+    }
+
+    function matchesShortcut(event, shortcut) {
+        if (!shortcut || !Array.isArray(shortcut) || shortcut.length < 2) return false;
+        const [mod, key] = shortcut;
+        if (!key) return false;
+
+        const alt = mod === 'Alt';
+        const ctrl = mod === 'Ctrl';
+        const shift = mod === 'Shift';
+        const win = mod === 'Win';
+        const noMod = !mod || mod === 'None' || mod === '';
+
+        if (noMod) {
+            if (event.altKey || event.ctrlKey || event.metaKey) return false;
+            const tag = document.activeElement?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return false;
+        } else {
+            if (alt && !event.altKey) return false;
+            if (ctrl && !event.ctrlKey) return false;
+            if (shift && !event.shiftKey) return false;
+            if (win && !event.metaKey) return false;
+        }
+
+        const eventKey = (event.key || '').toLowerCase();
+        const targetKey = key.toLowerCase();
+
+        if (targetKey === 'space') {
+            return eventKey === ' ' || eventKey === 'space' || event.code === 'Space';
+        }
+        if (targetKey === 'return' || targetKey === 'enter') {
+            return eventKey === 'enter';
+        }
+        if (targetKey === 'escape') {
+            return eventKey === 'escape';
+        }
+
+        return eventKey === targetKey || event.code === `Key${key.toUpperCase()}` || event.code === `Digit${key}`;
+    }
+
     function handleGlobalKeydown(e) {
-        if (e.key === 'Enter') {
-            if (showTextInput || showDirInput || showDeleteConfirm || showSettings) {
-                return;
-            }
-            if (document.activeElement && document.activeElement.classList.contains('paste-toggle')) {
-                return;
-            }
-            if (searchQuery.trim()) {
-                return;
-            }
-            // 仅当且仅当恰好只有 1 个常用胶囊时，敲回车直接点击胶囊
-            if (suggestedItems && suggestedItems.length === 1) {
+        if (showTextInput || showDirInput || showDeleteConfirm || showSettings) {
+            return;
+        }
+        if (document.activeElement && document.activeElement.classList.contains('paste-toggle')) {
+            return;
+        }
+
+        // 仅当且仅当恰好只有 1 个常用胶囊时，敲回车直接点击胶囊
+        if (suggestedItems && suggestedItems.length === 1) {
+            if (e.key === 'Enter') {
+                if (searchQuery.trim()) return;
                 e.preventDefault();
                 handleSuggestionClick(suggestedItems[0]);
+                return;
+            }
+        } else if (suggestedItems && suggestedItems.length > 1) {
+            // 多个胶囊时启用各个胶囊的独立快捷键
+            for (let i = 0; i < suggestedItems.length && i < 3; i++) {
+                if (matchesShortcut(e, capsuleShortcuts[i])) {
+                    e.preventDefault();
+                    handleSuggestionClick(suggestedItems[i]);
+                    return;
+                }
             }
         }
     }
@@ -577,6 +702,7 @@
                                 on:focus={(e) => handleChipMouseEnter(e, idx)}
                                 on:blur={handleChipMouseLeave}
                                 on:click={() => handleSuggestionClick(item)}
+                                on:contextmenu={(e) => handleCapsuleContextMenu(e, item)}
                                 title={item.value || ''}
                             >
                                 <svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -587,12 +713,16 @@
                                 </svg>
                                 <span class="chip-title">{item.name}</span>
                                 {#if suggestedItems.length === 1}
-                                    <span class="chip-badge">
+                                    <span class="chip-badge enter-badge always-visible">
                                         <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                                             <polyline points="9 10 4 15 9 20"></polyline>
                                             <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
                                         </svg>
                                         <span>Enter</span>
+                                    </span>
+                                {:else if getCapsuleBadgeLabel(idx)}
+                                    <span class="chip-badge shortcut-badge">
+                                        <span>{getCapsuleBadgeLabel(idx)}</span>
                                     </span>
                                 {/if}
                             </button>
@@ -652,10 +782,12 @@
     flipX={globalContextMenu.flipX}
     flipY={globalContextMenu.flipY}
     targetNode={globalContextMenu.targetNode}
+    isCapsule={globalContextMenu.isCapsule}
     on:addText={addText}
     on:addDir={addDir}
     on:editText={editText}
     on:editDir={editDir}
+    on:removeCapsule={removeCapsule}
     on:delete={deleteItem}
 />
 
@@ -678,10 +810,10 @@
 
 <ConfirmModal 
     visible={showDeleteConfirm}
-    title="Confirm Delete"
-    message={itemToDelete ? `Are you sure you want to delete "${itemToDelete.name}"?` : ''}
-    confirmText="Delete"
-    cancelText="Cancel"
+    title={deleteType === 'capsule' ? '移除常用推荐' : '确认删除'}
+    message={itemToDelete ? (deleteType === 'capsule' ? `确定从常用推荐中移除 "${itemToDelete.name}" 吗？` : `确定要彻底删除 "${itemToDelete.name}" 吗？此操作不可撤销。`) : ''}
+    confirmText={deleteType === 'capsule' ? '移除' : '删除'}
+    cancelText="取消"
     on:confirm={confirmDeleteItem}
     on:cancel={cancelDelete}
 />
@@ -860,38 +992,83 @@
         font-size: 11px;
         font-weight: 600;
         line-height: 1;
-        padding: 2.5px 6.5px;
-        margin-left: 6px;
+        border-radius: 4px;
+        letter-spacing: 0.2px;
+        user-select: none;
+        pointer-events: none;
+        white-space: nowrap;
         color: #2b5074;
         background: rgba(240, 246, 252, 0.94);
-        border: 1px solid rgba(140, 170, 200, 0.42);
-        border-bottom: 1.5px solid rgba(105, 140, 175, 0.65);
-        border-radius: 4px;
         box-shadow:
             0 1px 2px rgba(15, 23, 42, 0.05),
             inset 0 1px 0 rgba(255, 255, 255, 0.95);
-        letter-spacing: 0.2px;
-        user-select: none;
-        transition: all 0.18s ease;
+        transition: max-width 0.25s cubic-bezier(0.34, 1.3, 0.64, 1),
+                    opacity 0.2s ease,
+                    padding 0.25s ease,
+                    margin-left 0.25s ease,
+                    border-width 0.2s ease,
+                    background-color 0.18s ease,
+                    color 0.18s ease,
+                    box-shadow 0.18s ease;
     }
 
-    .chip-badge .enter-icon {
-        opacity: 0.75;
-        flex-shrink: 0;
-        transition: opacity 0.18s ease, transform 0.18s ease;
+    /* 多胶囊快捷键徽标：默认完全折叠隐藏，hover展开时显现 */
+    .chip-badge.shortcut-badge {
+        max-width: 0;
+        opacity: 0;
+        padding: 2.5px 0;
+        margin-left: 0;
+        overflow: hidden;
+        border: 0 solid rgba(140, 170, 200, 0.42);
     }
 
-    .suggestion-chip:hover .chip-badge {
+    .suggestion-chip:hover .chip-badge.shortcut-badge,
+    .suggestion-chip:focus .chip-badge.shortcut-badge,
+    .suggestion-chip.hover-expand .chip-badge.shortcut-badge {
+        opacity: 1;
+        max-width: 90px;
+        padding: 2.5px 6.5px;
+        margin-left: 6px;
+        border: 1px solid rgba(90, 130, 168, 0.55);
+        border-bottom: 1.5px solid rgba(70, 115, 155, 0.8);
         background: #ffffff;
         color: #1a4266;
-        border-color: rgba(90, 130, 168, 0.55);
-        border-bottom-color: rgba(70, 115, 155, 0.8);
         box-shadow:
             0 2px 5px rgba(25, 45, 70, 0.09),
             inset 0 1px 0 #ffffff;
     }
 
-    .suggestion-chip:hover .chip-badge .enter-icon {
+    /* 单胶囊 Enter 徽标：始终完整显示，不折叠 */
+    .chip-badge.always-visible {
+        opacity: 1;
+        max-width: none;
+        padding: 2.5px 7px;
+        margin-left: 6px;
+        overflow: visible;
+        font-size: 11.5px;
+        border: 1px solid rgba(140, 170, 200, 0.45);
+        border-bottom: 1.5px solid rgba(110, 145, 180, 0.68);
+    }
+
+    .suggestion-chip:hover .chip-badge.always-visible,
+    .suggestion-chip:focus .chip-badge.always-visible {
+        border-color: rgba(90, 130, 168, 0.6);
+        border-bottom: 1.5px solid rgba(70, 115, 155, 0.85);
+        background: #ffffff;
+        color: #1a4266;
+        box-shadow:
+            0 2px 5px rgba(25, 45, 70, 0.09),
+            inset 0 1px 0 #ffffff;
+    }
+
+    .chip-badge .enter-icon {
+        opacity: 0.8;
+        flex-shrink: 0;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .suggestion-chip:hover .chip-badge .enter-icon,
+    .suggestion-chip:focus .chip-badge .enter-icon {
         opacity: 1;
         transform: translateX(-1px);
     }

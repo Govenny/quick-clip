@@ -13,6 +13,9 @@ type GeneralConfig struct {
 type ShortcutsConfig struct {
 	WakeUp        [2]string `json:"wakeUp"`
 	PasteWaitTime int       `json:"pasteWaitTime"`
+	Capsule1      [2]string `json:"capsule1"`
+	Capsule2      [2]string `json:"capsule2"`
+	Capsule3      [2]string `json:"capsule3"`
 }
 
 type AppearanceConfig struct {
@@ -62,6 +65,9 @@ func (m *ConfigManager) Load() (*Config, error) {
 			ShortcutsConfig{
 				WakeUp:        [2]string{"Alt", "Space"},
 				PasteWaitTime: 100,
+				Capsule1:      [2]string{"Alt", "1"},
+				Capsule2:      [2]string{"Alt", "2"},
+				Capsule3:      [2]string{"Alt", "3"},
 			},
 			AppearanceConfig{
 				Opacity:       250,
@@ -78,6 +84,15 @@ func (m *ConfigManager) Load() (*Config, error) {
 	err = json.Unmarshal(data, &config)
 	if config.Appearance.FontSizeLevel < 1 || config.Appearance.FontSizeLevel > 5 {
 		config.Appearance.FontSizeLevel = 2
+	}
+	if config.Shortcuts.Capsule1[1] == "" {
+		config.Shortcuts.Capsule1 = [2]string{"Alt", "1"}
+	}
+	if config.Shortcuts.Capsule2[1] == "" {
+		config.Shortcuts.Capsule2 = [2]string{"Alt", "2"}
+	}
+	if config.Shortcuts.Capsule3[1] == "" {
+		config.Shortcuts.Capsule3 = [2]string{"Alt", "3"}
 	}
 	return &config, err
 }

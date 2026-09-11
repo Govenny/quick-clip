@@ -8,6 +8,7 @@
     export let flipX = false;
     export let flipY = false;
     export let targetNode = null;
+    export let isCapsule = false;
 
     const dispatch = createEventDispatcher();
 
@@ -33,18 +34,26 @@
         out:fade={{ duration: 60 }}
         on:contextmenu|preventDefault
     >
-        {#if targetNode?.type === 'folder'}
-            <div class="menu-item" on:click={() => dispatch('addText')} on:keydown={(e) => e.key === 'Enter' && dispatch('addText')}>New Text</div>
-            <div class="menu-item" on:click={() => dispatch('addDir')} on:keydown={(e) => e.key === 'Enter' && dispatch('addDir')}>New Folder</div>
+        {#if isCapsule}
+            <div class="menu-item" on:click={() => dispatch('removeCapsule')} on:keydown={(e) => e.key === 'Enter' && dispatch('removeCapsule')}>从常用移除</div>
             <div class="menu-divider"></div>
-            <div class="menu-item" on:click={() => dispatch('editDir')} on:keydown={(e) => e.key === 'Enter' && dispatch('editDir')}>Edit</div>
-            <div class="menu-divider"></div>
-        {/if}
-        {#if targetNode?.type === 'text'}
             <div class="menu-item" on:click={() => dispatch('editText')} on:keydown={(e) => e.key === 'Enter' && dispatch('editText')}>Edit</div>
             <div class="menu-divider"></div>
+            <div class="menu-item delete" on:click={() => dispatch('delete')} on:keydown={(e) => e.key === 'Enter' && dispatch('delete')}>Delete</div>
+        {:else}
+            {#if targetNode?.type === 'folder'}
+                <div class="menu-item" on:click={() => dispatch('addText')} on:keydown={(e) => e.key === 'Enter' && dispatch('addText')}>New Text</div>
+                <div class="menu-item" on:click={() => dispatch('addDir')} on:keydown={(e) => e.key === 'Enter' && dispatch('addDir')}>New Folder</div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" on:click={() => dispatch('editDir')} on:keydown={(e) => e.key === 'Enter' && dispatch('editDir')}>Edit</div>
+                <div class="menu-divider"></div>
+            {/if}
+            {#if targetNode?.type === 'text'}
+                <div class="menu-item" on:click={() => dispatch('editText')} on:keydown={(e) => e.key === 'Enter' && dispatch('editText')}>Edit</div>
+                <div class="menu-divider"></div>
+            {/if}
+            <div class="menu-item delete" on:click={() => dispatch('delete')} on:keydown={(e) => e.key === 'Enter' && dispatch('delete')}>Delete</div>
         {/if}
-        <div class="menu-item delete" on:click={() => dispatch('delete')} on:keydown={(e) => e.key === 'Enter' && dispatch('delete')}>Delete</div>
     </div>
 {/if}
 

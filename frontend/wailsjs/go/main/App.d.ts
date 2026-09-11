@@ -24,6 +24,8 @@ export function PasteAndHide():Promise<void>;
 
 export function RecordItemUsage(arg1:string):Promise<void>;
 
+export function RemoveItemUsage(arg1:string):Promise<void>;
+
 export function RegisterGlobalHotkey(arg1:string,arg2:string):Promise<void>;
 
 export function SaveContent(arg1:Array<any>):Promise<void>;

@@ -40,6 +40,17 @@ func TestStatsManager_RecordAndGetTop(t *testing.T) {
 	if !reflect.DeepEqual(topReloaded, wantTop3) {
 		t.Fatalf("Reloaded GetTopItemIds got %v, want %v", topReloaded, wantTop3)
 	}
+
+	// 测试从统计中删除 item2
+	smReloaded.RemoveItemStats("item2")
+	if err := smReloaded.Flush(); err != nil {
+		t.Fatalf("Flush after RemoveItemStats failed: %v", err)
+	}
+	topAfterRemove := smReloaded.GetTopItemIds(contextKey, 3)
+	wantAfterRemove := []string{"item1", "item3"}
+	if !reflect.DeepEqual(topAfterRemove, wantAfterRemove) {
+		t.Fatalf("GetTopItemIds after RemoveItemStats got %v, want %v", topAfterRemove, wantAfterRemove)
+	}
 }
 
 func TestGenerateContextKey(t *testing.T) {

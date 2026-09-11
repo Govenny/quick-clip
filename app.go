@@ -342,3 +342,11 @@ func (a *App) RecordItemUsage(itemId string) {
 		a.statsManager.RecordUsage(cKey, itemId)
 	}
 }
+
+// RemoveItemUsage removes usage records of an item so it won't appear in context suggestions.
+func (a *App) RemoveItemUsage(itemId string) {
+	if a.statsManager == nil || itemId == "" {
+		return
+	}
+	a.statsManager.RemoveItemStats(itemId)
+}

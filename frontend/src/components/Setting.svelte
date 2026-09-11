@@ -12,14 +12,35 @@
     let config = null;
     let activeTab = 'appearance'; // 'appearance' | 'shortcuts' | 'general'
     const modifiers = ["Alt", "Ctrl", "Shift", "Win"];
+    const capsuleModifiers = ["None", "Alt", "Ctrl", "Shift", "Win"];
     const keys = ["Space", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Return", "Escape", "Delete", "Tab", "Left", "Right", "Up", "Down", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
     let selectedMod = "";
     let selectedKey = "";
+    let cap1Mod = "Alt";
+    let cap1Key = "1";
+    let cap2Mod = "Alt";
+    let cap2Key = "2";
+    let cap3Mod = "Alt";
+    let cap3Key = "3";
     let currentFontLevel = 2;
 
-    $: if (config && config.shortcuts.wakeUp && !selectedMod) {
-        selectedMod = config.shortcuts.wakeUp[0];
-        selectedKey = config.shortcuts.wakeUp[1];
+    $: if (config && config.shortcuts) {
+        if (!selectedMod && config.shortcuts.wakeUp) {
+            selectedMod = config.shortcuts.wakeUp[0] || "Alt";
+            selectedKey = config.shortcuts.wakeUp[1] || "Space";
+        }
+        if (config.shortcuts.capsule1) {
+            cap1Mod = config.shortcuts.capsule1[0] || "Alt";
+            cap1Key = config.shortcuts.capsule1[1] || "1";
+        }
+        if (config.shortcuts.capsule2) {
+            cap2Mod = config.shortcuts.capsule2[0] || "Alt";
+            cap2Key = config.shortcuts.capsule2[1] || "2";
+        }
+        if (config.shortcuts.capsule3) {
+            cap3Mod = config.shortcuts.capsule3[0] || "Alt";
+            cap3Key = config.shortcuts.capsule3[1] || "3";
+        }
     }
 
     $: if (config && config.appearance && config.appearance.fontSizeLevel) {
@@ -42,6 +63,15 @@
         config.shortcuts.wakeUp = [selectedMod, selectedKey];
         LogInfo("新快捷键:" + config.shortcuts.wakeUp);
         RegisterGlobalHotkey(config.shortcuts.wakeUp[0], config.shortcuts.wakeUp[1]);
+        UpdateConfig(config);
+    }
+
+    function updateCapsuleHotkeys() {
+        if (!config || !config.shortcuts) return;
+        config.shortcuts.capsule1 = [cap1Mod, cap1Key];
+        config.shortcuts.capsule2 = [cap2Mod, cap2Key];
+        config.shortcuts.capsule3 = [cap3Mod, cap3Key];
+        LogInfo(`胶囊快捷键更新: ${cap1Mod}+${cap1Key}, ${cap2Mod}+${cap2Key}, ${cap3Mod}+${cap3Key}`);
         UpdateConfig(config);
     }
 
@@ -240,6 +270,74 @@
                             </select>
                             <span class="hotkey-plus">+</span>
                             <select class="styled-select" bind:value={selectedKey} on:change={updateHotkey}>
+                                {#each keys as key}
+                                    <option value={key}>{key}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="setting-divider"></div>
+
+                    <!-- 胶囊 1 快捷键 -->
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">胶囊 1 快捷键</div>
+                            <div class="setting-desc">多胶囊时首个常用胶囊快捷键</div>
+                        </div>
+                        <div class="hotkey-wrapper">
+                            <select class="styled-select" bind:value={cap1Mod} on:change={updateCapsuleHotkeys}>
+                                {#each capsuleModifiers as mod}
+                                    <option value={mod}>{mod === 'None' ? '无' : mod}</option>
+                                {/each}
+                            </select>
+                            <span class="hotkey-plus">+</span>
+                            <select class="styled-select" bind:value={cap1Key} on:change={updateCapsuleHotkeys}>
+                                {#each keys as key}
+                                    <option value={key}>{key}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-divider"></div>
+
+                    <!-- 胶囊 2 快捷键 -->
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">胶囊 2 快捷键</div>
+                            <div class="setting-desc">多胶囊时第二常用胶囊快捷键</div>
+                        </div>
+                        <div class="hotkey-wrapper">
+                            <select class="styled-select" bind:value={cap2Mod} on:change={updateCapsuleHotkeys}>
+                                {#each capsuleModifiers as mod}
+                                    <option value={mod}>{mod === 'None' ? '无' : mod}</option>
+                                {/each}
+                            </select>
+                            <span class="hotkey-plus">+</span>
+                            <select class="styled-select" bind:value={cap2Key} on:change={updateCapsuleHotkeys}>
+                                {#each keys as key}
+                                    <option value={key}>{key}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-divider"></div>
+
+                    <!-- 胶囊 3 快捷键 -->
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">胶囊 3 快捷键</div>
+                            <div class="setting-desc">多胶囊时第三常用胶囊快捷键</div>
+                        </div>
+                        <div class="hotkey-wrapper">
+                            <select class="styled-select" bind:value={cap3Mod} on:change={updateCapsuleHotkeys}>
+                                {#each capsuleModifiers as mod}
+                                    <option value={mod}>{mod === 'None' ? '无' : mod}</option>
+                                {/each}
+                            </select>
+                            <span class="hotkey-plus">+</span>
+                            <select class="styled-select" bind:value={cap3Key} on:change={updateCapsuleHotkeys}>
                                 {#each keys as key}
                                     <option value={key}>{key}</option>
                                 {/each}

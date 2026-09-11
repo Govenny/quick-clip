@@ -46,6 +46,10 @@ export function RecordItemUsage(arg1) {
   return window['go']['main']['App']['RecordItemUsage'](arg1);
 }
 
+export function RemoveItemUsage(arg1) {
+  return window['go']['main']['App']['RemoveItemUsage'](arg1);
+}
+
 export function RegisterGlobalHotkey(arg1, arg2) {
   return window['go']['main']['App']['RegisterGlobalHotkey'](arg1, arg2);
 }
