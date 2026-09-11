@@ -12,11 +12,14 @@
     let dirName = "";
     let dirInputRef;
 
-    $: if (visible) {
+    function initModal(node) {
         dirName = initialName || "";
-        tick().then(() => {
+        setTimeout(() => {
             dirInputRef?.focus();
-        });
+            if (isEdit) {
+                dirInputRef?.select();
+            }
+        }, 50);
     }
 
     function handleConfirm() {
@@ -49,6 +52,7 @@
     >
         <div 
             class="modal-box compact" 
+            use:initModal
             on:click|stopPropagation 
             on:keydown|stopPropagation 
             in:fly={{ y: 15, duration: 230, easing: cubicOut }} 

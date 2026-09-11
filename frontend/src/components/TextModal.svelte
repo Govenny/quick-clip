@@ -15,12 +15,15 @@
     let titleInputRef;
     let textInputRef;
 
-    $: if (visible) {
+    function initModal(node) {
         titleName = initialTitle || "";
         textName = initialValue || "";
-        tick().then(() => {
+        setTimeout(() => {
             titleInputRef?.focus();
-        });
+            if (isEdit) {
+                titleInputRef?.select();
+            }
+        }, 50);
     }
 
     $: isFormValid = titleName.trim() !== "" && textName.trim() !== "";
@@ -72,6 +75,7 @@
     >
         <div 
             class="modal-box" 
+            use:initModal
             on:keydown|stopPropagation 
             on:click|stopPropagation 
             in:fly={{ y: 15, duration: 230, easing: cubicOut }} 
