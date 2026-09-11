@@ -237,7 +237,8 @@
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
-		font-size: 13px;
+		min-height: var(--app-item-line-height, 28px);
+		font-size: var(--app-font-size, 13px);
 		color: #333;
 		text-align: left;
 		box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.045);

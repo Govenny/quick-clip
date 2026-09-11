@@ -1,3 +1,10 @@
+:root {
+    --app-font-size: 13px;
+    --app-chip-height: 24px;
+    --app-item-line-height: 28px;
+    --app-icon-size: 11px;
+}
+
 html,
 body {
     width: 100%;
@@ -17,7 +24,7 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-overflow-scrolling: touch;
-    font-size: 13px;
+    font-size: var(--app-font-size, 13px);
     text-rendering: optimizeLegibility;
 }
 

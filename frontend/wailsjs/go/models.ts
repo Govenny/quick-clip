@@ -2,6 +2,7 @@ export namespace internal {
 	
 	export class AppearanceConfig {
 	    opacity: number;
+	    fontSizeLevel: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppearanceConfig(source);
@@ -10,6 +11,7 @@ export namespace internal {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.opacity = source["opacity"];
+	        this.fontSizeLevel = source["fontSizeLevel"];
 	    }
 	}
 	export class WindowConfig {

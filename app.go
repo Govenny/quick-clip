@@ -237,6 +237,15 @@ func (a *App) HideAndRestore() {
 	a.action.RestoreFocus(a.lastHwnd)
 }
 
+// FontSizeWindowSizes 定义 5 个字体档位对应的推荐窗口尺寸 (宽 × 高)
+var FontSizeWindowSizes = map[int][2]int{
+	1: {395, 550},
+	2: {420, 580},
+	3: {450, 615},
+	4: {480, 645},
+	5: {515, 680},
+}
+
 // 进入设置模式：变大
 func (a *App) EnterSettingsMode() {
 	a.action.SetResizeSuppressed(true)
@@ -249,12 +258,40 @@ func (a *App) ExitSettingsMode() {
 	a.action.SetResizeSuppressed(true)
 	width := 420
 	height := 580
-	if a.config != nil && a.config.Window.Width > 0 && a.config.Window.Height > 0 {
-		width = a.config.Window.Width
-		height = a.config.Window.Height
+	if a.config != nil {
+		lvl := a.config.Appearance.FontSizeLevel
+		if lvl <= 0 || lvl > 5 {
+			lvl = 2
+		}
+		if target, ok := FontSizeWindowSizes[lvl]; ok {
+			width = target[0]
+			height = target[1]
+		}
+		a.config.Window.Width = width
+		a.config.Window.Height = height
+		if a.configManager != nil {
+			_ = a.configManager.Save(a.config)
+		}
 	}
 	a.action.SetSizeNative(width, height)
 	a.action.SetResizeSuppressed(false)
+}
+
+// SetFontSizeLevel 设置字体档位 (1-5) 并联动同步保存窗口推荐尺寸
+func (a *App) SetFontSizeLevel(level int) {
+	if level < 1 || level > 5 {
+		level = 2
+	}
+	if a.config != nil {
+		a.config.Appearance.FontSizeLevel = level
+		if target, ok := FontSizeWindowSizes[level]; ok {
+			a.config.Window.Width = target[0]
+			a.config.Window.Height = target[1]
+		}
+		if a.configManager != nil {
+			_ = a.configManager.Save(a.config)
+		}
+	}
 }
 
 // GetConfig 供前端获取当前配置

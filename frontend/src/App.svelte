@@ -15,7 +15,8 @@
         }
         return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
     }
-    import { EnterSettingsMode, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage} from '../wailsjs/go/main/App'; 
+    import { EnterSettingsMode, GetConfig, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage} from '../wailsjs/go/main/App'; 
+    import { applyFontSizeLevel } from './fontSize';
     import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
     import Setting from './components/Setting.svelte';
@@ -220,11 +221,15 @@
 
     onMount(async () => {
         try {
+            const cfg = await GetConfig();
+            if (cfg && cfg.appearance && cfg.appearance.fontSizeLevel) {
+                applyFontSizeLevel(cfg.appearance.fontSizeLevel);
+            }
             const rawData = await GetContent();
             data = normalizeTree(rawData);
             await loadSuggestions();
         } catch (error) {
-            console.error('Failed to load content:', error);
+            console.error('Failed to load content/config:', error);
         }
     });
 
@@ -612,9 +617,11 @@
 
 {#if showSettings}
     <Setting 
-        on:close={() => {
+        on:close={async () => {
             showSettings = false;
             ExitSettingsMode();
+            await tick();
+            updateTruncationStatus();
         }} 
     />
 {/if}
@@ -700,7 +707,7 @@
         overflow: hidden;
         flex: 1;
         min-width: 0;
-        height: 24px;
+        height: var(--app-chip-height, 24px);
     }
 
     .suggestion-chip {
@@ -711,11 +718,11 @@
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 12px;
-        font-size: 13px;
+        font-size: var(--app-font-size, 13px);
         font-weight: 550;
         color: #1e293b;
         cursor: pointer;
-        height: 24px;
+        height: var(--app-chip-height, 24px);
         box-sizing: border-box;
         white-space: nowrap;
         overflow: hidden;
@@ -792,7 +799,7 @@
         flex: 1 1 auto;
         min-width: 0;
         text-align: left;
-        line-height: 24px;
+        line-height: var(--app-chip-height, 24px);
     }
 
     .search-wrapper {
@@ -809,7 +816,7 @@
         padding: 0 9px;
         color: #263442;
         font-family: inherit;
-        font-size: 13px;
+        font-size: var(--app-font-size, 13px);
         outline: none;
         box-shadow:
             inset 0 0 0 1px rgba(75, 98, 119, 0.07),

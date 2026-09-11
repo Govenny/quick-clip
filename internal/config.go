@@ -16,7 +16,8 @@ type ShortcutsConfig struct {
 }
 
 type AppearanceConfig struct {
-	Opacity uint8 `json:"opacity"`
+	Opacity       uint8 `json:"opacity"`
+	FontSizeLevel int   `json:"fontSizeLevel"` // 1~5, 默认 2 (标准 13px)
 }
 
 type WindowConfig struct {
@@ -63,7 +64,8 @@ func (m *ConfigManager) Load() (*Config, error) {
 				PasteWaitTime: 100,
 			},
 			AppearanceConfig{
-				Opacity: 250,
+				Opacity:       250,
+				FontSizeLevel: 2,
 			},
 			WindowConfig{
 				Width:  420,
@@ -74,6 +76,9 @@ func (m *ConfigManager) Load() (*Config, error) {
 
 	var config Config
 	err = json.Unmarshal(data, &config)
+	if config.Appearance.FontSizeLevel < 1 || config.Appearance.FontSizeLevel > 5 {
+		config.Appearance.FontSizeLevel = 2
+	}
 	return &config, err
 }
 

@@ -1,22 +1,40 @@
 <script>
 import { createEventDispatcher, onMount } from 'svelte';
     import { fade, fly } from 'svelte/transition';
-    import { GetConfig, UpdateConfig, RegisterGlobalHotkey, SetOpacity } from "../../wailsjs/go/main/App"
+    import { GetConfig, UpdateConfig, RegisterGlobalHotkey, SetOpacity, SetFontSizeLevel } from "../../wailsjs/go/main/App"
     import { ToggleAutoStart, IsAutoStartCheck } from "../../wailsjs/go/internal/AppService"
     import { LogInfo } from '../../wailsjs/runtime/runtime';
     import { internal } from "../../wailsjs/go/models"
+    import { applyFontSizeLevel, FONT_SIZE_LEVELS } from "../fontSize";
 
     let config = null; // 初始设为 null
     const modifiers = ["Alt", "Ctrl", "Shift", "Win"];
     const keys = ["Space", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Return", "Escape", "Delete", "Tab", "Left", "Right", "Up", "Down", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
     let selectedMod = "";
     let selectedKey = "";
+    let currentFontLevel = 2;
 
     // 3. 在数据加载完成后，解析 config.shortcuts.wakeUp
     // 比如把 "Alt+Space" 拆分成 "Alt" 和 "Space"
     $: if (config && config.shortcuts.wakeUp && !selectedMod) {
         selectedMod = config.shortcuts.wakeUp[0];
         selectedKey = config.shortcuts.wakeUp[1];
+    }
+
+    $: if (config && config.appearance && config.appearance.fontSizeLevel) {
+        currentFontLevel = Number(config.appearance.fontSizeLevel);
+    }
+
+    $: currentLevelData = FONT_SIZE_LEVELS[Number(currentFontLevel)] || FONT_SIZE_LEVELS[2];
+
+    function selectFontLevel(level) {
+        const lvl = Math.max(1, Math.min(5, Number(level) || 2));
+        currentFontLevel = lvl;
+        if (config && config.appearance) {
+            config.appearance.fontSizeLevel = lvl;
+        }
+        applyFontSizeLevel(lvl);
+        SetFontSizeLevel(lvl);
     }
 
     function updateHotkey() {
@@ -43,6 +61,9 @@ import { createEventDispatcher, onMount } from 'svelte';
         try {
             const rawConfig = await GetConfig();
             config = internal.Config.createFrom(rawConfig);
+            if (config && config.appearance && config.appearance.fontSizeLevel) {
+                currentFontLevel = config.appearance.fontSizeLevel;
+            }
         } catch (error) {
             console.error('Failed to load config:', error);
         }
@@ -201,6 +222,85 @@ import { createEventDispatcher, onMount } from 'svelte';
                                     on:change={updateOpacity}
                                     >
                                     <span>{(config.appearance.opacity / 255).toFixed(2)}%</span>
+                                </div>
+                            </div>
+
+                            <div class="setting-row font-setting-row">
+                                <div class="setting-info">
+                                    <span class="setting-title">字体大小与界面缩放</span>
+                                    <span class="desc">共 5 档位，默认均以常用胶囊完整容纳 5 汉字为窗口基准</span>
+                                </div>
+
+                                <!-- 微信同款 5 档位吸附滑块 -->
+                                <div class="wechat-font-slider-container">
+                                    <div class="slider-track-wrap">
+                                        <div class="track-line"></div>
+                                        <!-- 5 个离散档位停靠刻度 -->
+                                        {#each [1, 2, 3, 4, 5] as lvl}
+                                            <button 
+                                                type="button"
+                                                class="step-mark" 
+                                                class:active={Number(currentFontLevel) === lvl}
+                                                style="left: {(lvl - 1) * 25}%"
+                                                on:click={() => selectFontLevel(lvl)}
+                                                aria-label={`选择 ${FONT_SIZE_LEVELS[lvl].name} 档位`}
+                                            >
+                                                <span class="mark-dot"></span>
+                                            </button>
+                                        {/each}
+                                        <!-- 微信同款可滑动大圆钮 -->
+                                        <div 
+                                            class="slider-thumb" 
+                                            style="left: {(Number(currentFontLevel) - 1) * 25}%"
+                                        >
+                                            <div class="thumb-inner"></div>
+                                        </div>
+                                    </div>
+                                    <div class="step-labels">
+                                        {#each [1, 2, 3, 4, 5] as lvl}
+                                            <button 
+                                                type="button"
+                                                class="step-label-btn" 
+                                                class:active={Number(currentFontLevel) === lvl}
+                                                on:click={() => selectFontLevel(lvl)}
+                                            >
+                                                <span class="label-name">{FONT_SIZE_LEVELS[lvl].name}</span>
+                                                {#if lvl === 2}<span class="default-badge">默认</span>{/if}
+                                            </button>
+                                        {/each}
+                                    </div>
+                                </div>
+
+                                <!-- 实时效果微缩预览卡片 -->
+                                <div class="font-preview-card">
+                                    <div class="preview-header">
+                                        <span class="preview-title">实时预览: {currentLevelData.name} ({currentLevelData.fontSize})</span>
+                                        <span class="preview-meta">基准窗口: {currentLevelData.window}</span>
+                                    </div>
+                                    <div class="preview-content">
+                                        <div class="preview-chip-row">
+                                            <span class="preview-tag">常用</span>
+                                            <div 
+                                                class="preview-chip"
+                                                style="height: {currentLevelData.chipHeight}; font-size: {currentLevelData.fontSize};"
+                                            >
+                                                <svg width="{currentLevelData.iconSize}" height="{currentLevelData.iconSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                                </svg>
+                                                <span class="preview-chip-text" style="line-height: {currentLevelData.chipHeight};">常用五字条目</span>
+                                            </div>
+                                        </div>
+                                        <div 
+                                            class="preview-tree-item"
+                                            style="min-height: {currentLevelData.itemHeight}; font-size: {currentLevelData.fontSize};"
+                                        >
+                                            <span class="preview-bullet">📄</span>
+                                            <span class="preview-tree-text">常用密码或文本片段 (完整五字测试)</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -429,5 +529,228 @@ import { createEventDispatcher, onMount } from 'svelte';
         color: #a1a1aa;
         padding: 0 4px;
         user-select: none;
+    }
+
+    /* --- 微信同款 5 档位字体滑块与预览卡片 --- */
+    .font-setting-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .wechat-font-slider-container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        padding: 6px 4px 2px;
+    }
+
+    .slider-track-wrap {
+        position: relative;
+        width: 100%;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        margin: 4px 0;
+    }
+
+    .track-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.35);
+        border-radius: 2px;
+        z-index: 1;
+    }
+
+    .step-mark {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        z-index: 2;
+    }
+
+    .mark-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #94a3b8;
+        box-shadow: 0 0 0 2px #fff;
+        transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), background-color 0.2s ease;
+    }
+
+    .step-mark:hover .mark-dot {
+        background: #3b82f6;
+        transform: scale(1.3);
+    }
+
+    .step-mark.active .mark-dot {
+        background: #2563eb;
+        transform: scale(1.4);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+    }
+
+    /* 微信同款白色滑块大圆钮 */
+    .slider-thumb {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 3;
+        transition: left 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+    }
+
+    .thumb-inner {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #2563eb;
+    }
+
+    .step-labels {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        margin-top: 2px;
+    }
+
+    .step-label-btn {
+        border: none !important;
+        background: transparent !important;
+        font-size: 12px;
+        color: #64748b;
+        cursor: pointer;
+        padding: 4px 6px !important;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        transition: all 0.2s ease;
+    }
+
+    .step-label-btn:hover {
+        color: #0f172a;
+        background: rgba(0, 0, 0, 0.04) !important;
+    }
+
+    .step-label-btn.active {
+        color: #2563eb;
+        font-weight: 600;
+        background: rgba(37, 99, 235, 0.08) !important;
+    }
+
+    .default-badge {
+        font-size: 9px;
+        padding: 0 4px;
+        background: rgba(37, 99, 235, 0.1);
+        color: #2563eb;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .font-preview-card {
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 8px;
+        padding: 10px 12px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(15, 23, 42, 0.03);
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #64748b;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+
+    .preview-content {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .preview-chip-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .preview-tag {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 0 5px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        background: rgba(71, 85, 105, 0.08);
+        color: #475569;
+        border-radius: 4px;
+        user-select: none;
+    }
+
+    .preview-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 8px;
+        height: var(--app-chip-height, 24px);
+        font-size: var(--app-font-size, 13px);
+        font-weight: 550;
+        color: #1e293b;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        max-width: 140px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .preview-chip-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .preview-tree-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: 5px;
+        background: rgba(241, 245, 249, 0.55);
+        border: 1px solid rgba(226, 232, 240, 0.7);
+        font-size: var(--app-font-size, 13px);
+        min-height: var(--app-item-line-height, 28px);
+        color: #334155;
+    }
+
+    .preview-tree-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 500;
     }
 </style>

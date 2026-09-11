@@ -65,7 +65,7 @@
 
     .menu-item {
         padding: 4px 10px;
-        font-size: 13px;
+        font-size: var(--app-font-size, 13px);
         border-radius: 4px;
         cursor: pointer;
         color: #333;
