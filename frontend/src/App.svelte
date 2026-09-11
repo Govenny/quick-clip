@@ -172,6 +172,19 @@
         ToggleWindow();
     };
 
+    function openSettings() {
+        showMenu = false;
+        showSettings = true;
+        EnterSettingsMode();
+    }
+
+    async function closeSettings() {
+        showSettings = false;
+        ExitSettingsMode();
+        await tick();
+        updateTruncationStatus();
+    }
+
     // 监听来自后端的 update-content 事件
     const contentEventListener = async () => {
         try {
@@ -477,111 +490,117 @@
 />
 
 <div class="app-container">
-    <div class="sticky-header">
-        <div class="header-row">
-            <button class="paste-toggle" class:active={autoPaste} on:click={() => { autoPaste = !autoPaste; }} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoPaste = !autoPaste; } }}>
-                <span class="toggle-text">
-                    <span class="toggle-label">{autoPaste ? 'Auto Paste' : 'Not Paste'}</span>
-                </span>
-                <span class="toggle-indicator">
-                    <span class="toggle-dot"></span>
-                </span>
-            </button>
-            
-            <div class="search-wrapper">
-                <input 
-                    type="search" 
-                    class="search-input" 
-                    placeholder="Search keys..." 
-                    bind:value={searchQuery}
-                >
-            </div>
-
-            <div class="action-wrapper">
-                <button class="icon-btn add-btn" on:click={toggleMenu} title="New Item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
+    {#if showSettings}
+        <Setting on:close={closeSettings} />
+    {:else}
+        <div class="sticky-header">
+            <div class="header-row">
+                <button class="paste-toggle" class:active={autoPaste} on:click={() => { autoPaste = !autoPaste; }} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoPaste = !autoPaste; } }}>
+                    <span class="toggle-text">
+                        <span class="toggle-label">{autoPaste ? 'Auto Paste' : 'Not Paste'}</span>
+                    </span>
+                    <span class="toggle-indicator">
+                        <span class="toggle-dot"></span>
+                    </span>
                 </button>
-                {#if showMenu}
-                    <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation in:fly={{ y: -5, duration: 150, easing: iosElastic }} out:fade={{duration: 70}}>
-                        <button on:click={addText}>文本 (Text)</button>
-                        <button on:click={addDir}>文件夹 (Folder)</button>
-                    </div>
-                {/if}
-            </div>
-        </div>
+                
+                <div class="search-wrapper">
+                    <input 
+                        type="search" 
+                        class="search-input" 
+                        placeholder="Search keys..." 
+                        bind:value={searchQuery}
+                    >
+                </div>
 
-        {#if suggestedItems && suggestedItems.length > 0 && !searchQuery.trim()}
-            <div class="suggestion-bar" transition:slide={{ duration: 160, easing: cubicOut }}>
-                <span class="suggestion-tag">常用</span>
-                <div class="suggestion-chips" class:has-expanded={hoveredExpandedIdx !== null}>
-                    {#each suggestedItems as item, idx}
-                        <button 
-                            class="suggestion-chip" 
-                            class:hover-expand={hoveredExpandedIdx === idx}
-                            on:mouseenter={(e) => handleChipMouseEnter(e, idx)}
-                            on:mouseleave={handleChipMouseLeave}
-                            on:focus={(e) => handleChipMouseEnter(e, idx)}
-                            on:blur={handleChipMouseLeave}
-                            on:click={() => handleSuggestionClick(item)}
-                            title={item.value || ''}
-                        >
-                            <svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                            </svg>
-                            <span class="chip-title">{item.name}</span>
-                        </button>
-                    {/each}
+                <div class="action-wrapper">
+                    <button class="icon-btn add-btn" on:click={toggleMenu} title="New Item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                    {#if showMenu}
+                        <div class="dropdown-menu" on:click|stopPropagation on:keydown|stopPropagation in:fly={{ y: -5, duration: 150, easing: iosElastic }} out:fade={{duration: 70}}>
+                            <button on:click={addText}>文本 (Text)</button>
+                            <button on:click={addDir}>文件夹 (Folder)</button>
+                            <div class="dropdown-divider"></div>
+                            <button on:click={openSettings}>偏好设置 (Settings)</button>
+                        </div>
+                    {/if}
                 </div>
             </div>
-        {/if}
-    </div>
-    
-    <div class="content-scrollable">
-        {#if searchQuery.trim()}
-            <div class="search-results-overlay">
-                {#if searchResults.length > 0}
-                    {#each searchResults as result}
-                        <div class="search-result-item" 
-                            on:click={() => handleSearchResultClick(result.content)}
-                            on:keydown={(e) => {
-                                if (e.key === 'Enter') {
-                                    handleSearchResultClick(result.content);
-                                }
-                            }}
-                        >
-                            <div class="result-path">{result.fullPath}</div>
-                            <div class="result-name">{result.name}</div>
-                        </div>
-                    {/each}
-                {:else}
-                    <div class="no-results">No matches found</div>
-                {/if}
-            </div>
-        {:else}
-            {#if data.length === 0}
-                <div class="empty-state">No Items</div>
-            {:else}
-                <ul class="tree-root">
-                    {#each data as node (node.id)}
-                        <TreeItem 
-                            {node}
-                            {expanded} 
-                            {toggleExpand} 
-                            {showContextMenu}
-                            onMoveNode={handleMoveNode}
-                            {autoPaste}
-                        />
-                    {/each}
-                </ul>
+
+            {#if suggestedItems && suggestedItems.length > 0 && !searchQuery.trim()}
+                <div class="suggestion-bar" transition:slide={{ duration: 160, easing: cubicOut }}>
+                    <span class="suggestion-tag">常用</span>
+                    <div class="suggestion-chips" class:has-expanded={hoveredExpandedIdx !== null}>
+                        {#each suggestedItems as item, idx}
+                            <button 
+                                class="suggestion-chip" 
+                                class:hover-expand={hoveredExpandedIdx === idx}
+                                on:mouseenter={(e) => handleChipMouseEnter(e, idx)}
+                                on:mouseleave={handleChipMouseLeave}
+                                on:focus={(e) => handleChipMouseEnter(e, idx)}
+                                on:blur={handleChipMouseLeave}
+                                on:click={() => handleSuggestionClick(item)}
+                                title={item.value || ''}
+                            >
+                                <svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                                <span class="chip-title">{item.name}</span>
+                            </button>
+                        {/each}
+                    </div>
+                </div>
             {/if}
-        {/if}
-    </div>
+        </div>
+        
+        <div class="content-scrollable">
+            {#if searchQuery.trim()}
+                <div class="search-results-overlay">
+                    {#if searchResults.length > 0}
+                        {#each searchResults as result}
+                            <div class="search-result-item" 
+                                on:click={() => handleSearchResultClick(result.content)}
+                                on:keydown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleSearchResultClick(result.content);
+                                    }
+                                }}
+                            >
+                                <div class="result-path">{result.fullPath}</div>
+                                <div class="result-name">{result.name}</div>
+                            </div>
+                        {/each}
+                    {:else}
+                        <div class="no-results">No matches found</div>
+                    {/if}
+                </div>
+            {:else}
+                {#if data.length === 0}
+                    <div class="empty-state">No Items</div>
+                {:else}
+                    <ul class="tree-root">
+                        {#each data as node (node.id)}
+                            <TreeItem 
+                                {node}
+                                {expanded} 
+                                {toggleExpand} 
+                                {showContextMenu}
+                                onMoveNode={handleMoveNode}
+                                {autoPaste}
+                            />
+                        {/each}
+                    </ul>
+                {/if}
+            {/if}
+        </div>
+    {/if}
 </div>
 
 <ContextMenu 
@@ -614,17 +633,6 @@
     on:submit={handleTextSubmit}
     on:cancel={closeTextModal}
 />
-
-{#if showSettings}
-    <Setting 
-        on:close={async () => {
-            showSettings = false;
-            ExitSettingsMode();
-            await tick();
-            updateTruncationStatus();
-        }} 
-    />
-{/if}
 
 <ConfirmModal 
     visible={showDeleteConfirm}
@@ -997,6 +1005,12 @@
         background: rgba(213, 235, 247, 0.76);
         color: #215f82;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58);
+    }
+
+    .dropdown-divider {
+        height: 1px;
+        background: rgba(74, 96, 116, 0.12);
+        margin: 4px 2px;
     }
 
     .content-scrollable {

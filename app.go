@@ -246,38 +246,15 @@ var FontSizeWindowSizes = map[int][2]int{
 	5: {515, 680},
 }
 
-// 进入设置模式：变大
+// 进入设置模式：保持主窗口尺寸与位置不变 (方案 A 极简转场)
 func (a *App) EnterSettingsMode() {
-	a.action.SetResizeSuppressed(true)
-	a.action.SetSizeNative(600, 450)
-	a.action.SetResizeSuppressed(false)
 }
 
-// 退出设置模式：变回主窗口尺寸
+// 退出设置模式：保持主窗口尺寸与位置不变
 func (a *App) ExitSettingsMode() {
-	a.action.SetResizeSuppressed(true)
-	width := 420
-	height := 580
-	if a.config != nil {
-		lvl := a.config.Appearance.FontSizeLevel
-		if lvl <= 0 || lvl > 5 {
-			lvl = 2
-		}
-		if target, ok := FontSizeWindowSizes[lvl]; ok {
-			width = target[0]
-			height = target[1]
-		}
-		a.config.Window.Width = width
-		a.config.Window.Height = height
-		if a.configManager != nil {
-			_ = a.configManager.Save(a.config)
-		}
-	}
-	a.action.SetSizeNative(width, height)
-	a.action.SetResizeSuppressed(false)
 }
 
-// SetFontSizeLevel 设置字体档位 (1-5) 并联动同步保存窗口推荐尺寸
+// SetFontSizeLevel 设置字体档位 (1-5) 并联动同步调整并保存窗口推荐尺寸
 func (a *App) SetFontSizeLevel(level int) {
 	if level < 1 || level > 5 {
 		level = 2
@@ -287,6 +264,7 @@ func (a *App) SetFontSizeLevel(level int) {
 		if target, ok := FontSizeWindowSizes[level]; ok {
 			a.config.Window.Width = target[0]
 			a.config.Window.Height = target[1]
+			a.action.SetSizeNative(target[0], target[1])
 		}
 		if a.configManager != nil {
 			_ = a.configManager.Save(a.config)
