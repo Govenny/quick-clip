@@ -350,3 +350,47 @@ func (a *App) RemoveItemUsage(itemId string) {
 	}
 	a.statsManager.RemoveItemStats(itemId)
 }
+
+// GetContextSlots returns the 3 capsule slots (pinned/auto/empty) for the current active window scene.
+func (a *App) GetContextSlots() []internal.CapsuleSlot {
+	a.contextMu.RLock()
+	cKey := a.currentContextKey
+	a.contextMu.RUnlock()
+
+	if a.statsManager == nil || cKey == "" {
+		return []internal.CapsuleSlot{
+			{Slot: 1, Type: "empty", ItemId: ""},
+			{Slot: 2, Type: "empty", ItemId: ""},
+			{Slot: 3, Type: "empty", ItemId: ""},
+		}
+	}
+	return a.statsManager.GetContextSlots(cKey)
+}
+
+// PinSlot pins an itemId to a specific slot (1, 2, or 3) under the current context.
+func (a *App) PinSlot(slot int, itemId string) {
+	if a.statsManager == nil || slot < 1 || slot > 3 {
+		return
+	}
+	a.contextMu.RLock()
+	cKey := a.currentContextKey
+	a.contextMu.RUnlock()
+
+	if cKey != "" {
+		a.statsManager.PinSlot(cKey, slot, itemId)
+	}
+}
+
+// UnpinSlot unpins a specific slot (1, 2, or 3) under the current context back to auto.
+func (a *App) UnpinSlot(slot int) {
+	if a.statsManager == nil || slot < 1 || slot > 3 {
+		return
+	}
+	a.contextMu.RLock()
+	cKey := a.currentContextKey
+	a.contextMu.RUnlock()
+
+	if cKey != "" {
+		a.statsManager.UnpinSlot(cKey, slot)
+	}
+}

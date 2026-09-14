@@ -14,6 +14,22 @@ export namespace internal {
 	        this.fontSizeLevel = source["fontSizeLevel"];
 	    }
 	}
+	export class CapsuleSlot {
+	    slot: number;
+	    type: string;
+	    itemId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CapsuleSlot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.slot = source["slot"];
+	        this.type = source["type"];
+	        this.itemId = source["itemId"];
+	    }
+	}
 	export class WindowConfig {
 	    width: number;
 	    height: number;

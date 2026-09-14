@@ -8,22 +8,34 @@
     export let message = "";
     export let confirmText = "Delete";
     export let cancelText = "Cancel";
+    export let confirmType = "delete"; // "delete" | "primary"
 
     const dispatch = createEventDispatcher();
 </script>
+
+<svelte:window on:keydown={(e) => {
+    if (!visible) return;
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        dispatch('cancel');
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        dispatch('confirm');
+    }
+}} />
 
 {#if visible}
     <div 
         class="modal-overlay" 
         on:click={() => dispatch('cancel')} 
-        on:keydown={(e) => e.key === 'Escape' && dispatch('cancel')} 
+        on:keydown={(e) => e.key === 'Escape' && dispatch('cancel')}
         in:fade={{ duration: 130, easing: quartOut }} 
         out:fade={{ duration: 80 }}
     >
         <div 
             class="modal-box compact confirm-modal" 
             on:click|stopPropagation 
-            on:keydown|stopPropagation 
+            on:keydown|stopPropagation
             in:fly={{ y: 15, duration: 230, easing: cubicOut }} 
             out:fly={{ y: 10, duration: 100 }}
         >
@@ -37,7 +49,12 @@
             </div>
             <div class="modal-footer confirm-footer">
                 <button class="btn btn-cancel" on:click={() => dispatch('cancel')}>{cancelText}</button>
-                <button class="btn btn-delete" on:click={() => dispatch('confirm')}>{confirmText}</button>
+                <button 
+                    class="btn" 
+                    class:btn-delete={confirmType === 'delete'}
+                    class:btn-primary={confirmType === 'primary'}
+                    on:click={() => dispatch('confirm')}
+                >{confirmText}</button>
             </div>
         </div>
     </div>
@@ -142,6 +159,18 @@
         background: #ef4444;
         color: #fff;
         border-color: #dc2626;
+    }
+
+    .btn-primary {
+        background: rgba(37, 99, 235, 0.12);
+        color: #2563eb;
+        border-color: rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:hover {
+        background: #2563eb;
+        color: #fff;
+        border-color: #1d4ed8;
     }
 </style>
 

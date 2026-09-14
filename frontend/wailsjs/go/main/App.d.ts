@@ -10,6 +10,8 @@ export function GetConfig():Promise<internal.Config>;
 
 export function GetContent():Promise<Array<any>>;
 
+export function GetContextSlots():Promise<Array<internal.CapsuleSlot>>;
+
 export function GetContextSuggestions():Promise<Array<string>>;
 
 export function GetDataPath():Promise<string>;
@@ -22,11 +24,13 @@ export function HideWindow():Promise<void>;
 
 export function PasteAndHide():Promise<void>;
 
+export function PinSlot(arg1:number,arg2:string):Promise<void>;
+
 export function RecordItemUsage(arg1:string):Promise<void>;
 
-export function RemoveItemUsage(arg1:string):Promise<void>;
-
 export function RegisterGlobalHotkey(arg1:string,arg2:string):Promise<void>;
+
+export function RemoveItemUsage(arg1:string):Promise<void>;
 
 export function SaveContent(arg1:Array<any>):Promise<void>;
 
@@ -35,5 +39,7 @@ export function SetFontSizeLevel(arg1:number):Promise<void>;
 export function SetOpacity(arg1:number):Promise<void>;
 
 export function ToggleWindow():Promise<void>;
+
+export function UnpinSlot(arg1:number):Promise<void>;
 
 export function UpdateConfig(arg1:internal.Config):Promise<string>;

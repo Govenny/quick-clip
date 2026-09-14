@@ -15,7 +15,7 @@
         }
         return 3*p1y*u*(1-u)*(1-u) + 3*p2y*u*u*(1-u) + u*u*u;
     }
-    import { EnterSettingsMode, GetConfig, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, RecordItemUsage, RemoveItemUsage } from '../wailsjs/go/main/App'; 
+    import { EnterSettingsMode, GetConfig, GetContent, SaveContent, ExitSettingsMode, ToggleWindow, HideWindow, GetContextSuggestions, GetContextSlots, PinSlot, UnpinSlot, RecordItemUsage, RemoveItemUsage } from '../wailsjs/go/main/App'; 
     import { applyFontSizeLevel } from './fontSize';
     import { LogInfo, EventsOn } from '../wailsjs/runtime';
     import TreeItem from './components/TreeItem.svelte';
@@ -30,22 +30,21 @@
     let expanded = {};
     let showMenu = false;
     let showSettings = false;
-    let suggestedItems = [];
-    let hoveredExpandedIdx = null;
-    let truncatedMap = {};
 
-    async function updateTruncationStatus() {
-        await tick();
-        const chips = document.querySelectorAll('.suggestion-chips .suggestion-chip');
-        const newMap = {};
-        chips.forEach((chip, idx) => {
-            const titleEl = chip.querySelector('.chip-title');
-            if (titleEl && titleEl.scrollWidth > titleEl.clientWidth + 1) {
-                newMap[idx] = true;
-            }
-        });
-        truncatedMap = newMap;
-    }
+    // 3 个常用槽位状态 (Slot 1, 2, 3)
+    let capsuleSlots = [
+        { slot: 1, type: 'empty', item: null },
+        { slot: 2, type: 'empty', item: null },
+        { slot: 3, type: 'empty', item: null }
+    ];
+
+    $: activeSlots = capsuleSlots.filter(s => s && s.type !== 'empty' && s.item);
+    $: activeSlotsCount = activeSlots.length;
+    $: hasActiveSlots = activeSlotsCount > 0;
+
+    // 槽位替换确认弹窗状态
+    let showSlotConfirm = false;
+    let pendingSlotTarget = { slot: 1, newNode: null, currentItem: null };
 
     // 粘贴模式开关: true=Auto Paste, false=Not Paste
     let autoPaste = true;
@@ -93,6 +92,7 @@
         y: 0,
         targetNode: null,
         isCapsule: false,
+        capsuleSlot: null,
         flipX: false,
         flipY: false
     };
@@ -104,6 +104,7 @@
             y: 0,
             targetNode: null,
             isCapsule: false,
+            capsuleSlot: null,
             flipX: false,
             flipY: false
         };
@@ -114,7 +115,7 @@
         e.stopPropagation();
         
         const isFolder = node && node.type === 'folder';
-        const menuWidth = 128;
+        const menuWidth = 148;
         const itemHeight = 28;
         const dividerHeight = 9;
         const padding = 8;
@@ -124,8 +125,8 @@
             itemCount = 4; // New Text + New Folder + Edit + Delete
             dividerCount = 2;
         } else {
-            itemCount = 2; // Edit + Delete
-            dividerCount = 1;
+            itemCount = 3; // 固定至常用槽位 + Edit + Delete
+            dividerCount = 2;
         }
         const menuHeight = itemCount * itemHeight + dividerCount * dividerHeight + padding;
         
@@ -141,21 +142,24 @@
             y: flipY ? e.pageY - menuHeight : e.pageY,
             targetNode: node,
             isCapsule: false,
+            capsuleSlot: null,
             flipX,
             flipY
         };
     }
 
-    function handleCapsuleContextMenu(e, item) {
+    function handleCapsuleContextMenu(e, slot) {
         e.preventDefault();
         e.stopPropagation();
+        if (!slot || slot.type === 'empty' || !slot.item) return;
 
-        const menuWidth = 128;
+        const menuWidth = 148;
         const itemHeight = 28;
         const dividerHeight = 9;
         const padding = 8;
-        // 3 项 (从常用移除, Edit, Delete) + 2 分割线
-        const menuHeight = 3 * itemHeight + 2 * dividerHeight + padding;
+        const itemCount = slot.type === 'pinned' ? 3 : 4;
+        const dividerCount = 2;
+        const menuHeight = itemCount * itemHeight + dividerCount * dividerHeight + padding;
 
         const winW = window.innerWidth;
         const winH = window.innerHeight;
@@ -167,8 +171,9 @@
             visible: true,
             x: flipX ? e.pageX - menuWidth : e.pageX,
             y: flipY ? e.pageY - menuHeight : e.pageY,
-            targetNode: item,
+            targetNode: slot.item,
             isCapsule: true,
+            capsuleSlot: slot,
             flipX,
             flipY
         };
@@ -210,9 +215,7 @@
         if (deleteType === 'capsule') {
             try {
                 await RemoveItemUsage(itemToDelete.id);
-                suggestedItems = suggestedItems.filter(i => i.id !== itemToDelete.id);
-                await tick();
-                updateTruncationStatus();
+                await loadSuggestions();
                 cancelDelete();
             } catch (err) {
                 console.error("移除胶囊失败", err);
@@ -222,9 +225,7 @@
                 deleteNodeById(data, itemToDelete.id);
                 updateData([...data]);
                 await RemoveItemUsage(itemToDelete.id);
-                suggestedItems = suggestedItems.filter(i => i.id !== itemToDelete.id);
-                await tick();
-                updateTruncationStatus();
+                await loadSuggestions();
                 cancelDelete();
             } catch (err) {
                 console.error("删除失败", err);
@@ -236,6 +237,74 @@
         showDeleteConfirm = false;
         itemToDelete = null;
         cleanGlobalContextMenu();
+    }
+
+    async function handleAssignSlot(event) {
+        const { slot, targetNode, currentSlot } = event.detail;
+        if (!targetNode) return;
+
+        if (!currentSlot || currentSlot.type === 'empty' || !currentSlot.item) {
+            // 空槽直接绑定，无需二次确认
+            try {
+                await PinSlot(slot, targetNode.id);
+                await loadSuggestions();
+            } catch (err) {
+                console.error("固定槽位失败", err);
+            }
+            hideContextMenu();
+        } else {
+            // 目标槽位已被占用：弹出二次确认
+            pendingSlotTarget = {
+                slot,
+                newNode: targetNode,
+                currentItem: currentSlot.item
+            };
+            showSlotConfirm = true;
+            hideContextMenu();
+        }
+    }
+
+    async function confirmSlotReplace() {
+        if (!pendingSlotTarget.newNode) return;
+        try {
+            await PinSlot(pendingSlotTarget.slot, pendingSlotTarget.newNode.id);
+            await loadSuggestions();
+        } catch (err) {
+            console.error("替换槽位失败", err);
+        } finally {
+            showSlotConfirm = false;
+            pendingSlotTarget = { slot: 1, newNode: null, currentItem: null };
+            cleanGlobalContextMenu();
+        }
+    }
+
+    function cancelSlotReplace() {
+        showSlotConfirm = false;
+        pendingSlotTarget = { slot: 1, newNode: null, currentItem: null };
+        cleanGlobalContextMenu();
+    }
+
+    async function handleUnpinSlot(event) {
+        const slotNum = event.detail;
+        try {
+            await UnpinSlot(slotNum);
+            await loadSuggestions();
+        } catch (err) {
+            console.error("取消固定槽位失败", err);
+        }
+        hideContextMenu();
+    }
+
+    async function handlePinHere(event) {
+        const slot = event.detail;
+        if (!slot || !slot.item) return;
+        try {
+            await PinSlot(slot.slot, slot.item.id);
+            await loadSuggestions();
+        } catch (err) {
+            console.error("锁定槽位失败", err);
+        }
+        hideContextMenu();
     }
 
     // 监听来自后端的 show-settings 事件
@@ -258,8 +327,6 @@
             const cfg = await GetConfig();
             syncCapsuleShortcutsFromConfig(cfg);
         } catch (e) {}
-        await tick();
-        updateTruncationStatus();
     }
 
     // 监听来自后端的 update-content 事件
@@ -268,6 +335,7 @@
             LogInfo("update-content发送成功");
             const newData = await GetContent();
             data = normalizeTree(newData);
+            await loadSuggestions();
             await tick();
         } catch (error) {
             console.error('Failed to load content:', error);
@@ -275,26 +343,32 @@
     };
 
     async function loadSuggestions() {
-        hoveredExpandedIdx = null;
         try {
-            const topIds = await GetContextSuggestions();
-            if (topIds && topIds.length > 0) {
-                const found = [];
-                for (const id of topIds) {
-                    const node = findNodeById(data, id);
-                    if (node && node.type === 'text') {
-                        found.push(node);
+            const rawSlots = await GetContextSlots();
+            if (rawSlots && rawSlots.length > 0) {
+                capsuleSlots = rawSlots.map(s => {
+                    if (s.itemId) {
+                        const node = findNodeById(data, s.itemId);
+                        if (node && node.type === 'text') {
+                            return { slot: s.slot, type: s.type, item: node };
+                        }
                     }
-                }
-                suggestedItems = found;
-                updateTruncationStatus();
+                    return { slot: s.slot, type: 'empty', item: null };
+                });
             } else {
-                suggestedItems = [];
-                truncatedMap = {};
+                capsuleSlots = [
+                    { slot: 1, type: 'empty', item: null },
+                    { slot: 2, type: 'empty', item: null },
+                    { slot: 3, type: 'empty', item: null }
+                ];
             }
         } catch (err) {
-            suggestedItems = [];
-            truncatedMap = {};
+            console.error("加载槽位推荐失败", err);
+            capsuleSlots = [
+                { slot: 1, type: 'empty', item: null },
+                { slot: 2, type: 'empty', item: null },
+                { slot: 3, type: 'empty', item: null }
+            ];
         }
     }
 
@@ -479,7 +553,6 @@
 
     // 焦点--------------------------------------------
     function handleBlur() {
-        hoveredExpandedIdx = null;
         setTimeout(() => {
             if (document.hasFocus()) {
                 return;
@@ -487,6 +560,13 @@
 
             if (showTextInput || showDirInput || showSettings) {
                 return; 
+            }
+
+            if (showDeleteConfirm) {
+                cancelDelete();
+            }
+            if (showSlotConfirm) {
+                cancelSlotReplace();
             }
 
             HideWindow();
@@ -510,19 +590,9 @@
         }
     }
 
-    function handleChipMouseEnter(event, idx) {
-        if (suggestedItems && suggestedItems.length > 1) {
-            hoveredExpandedIdx = idx;
-        }
-    }
-
-    function handleChipMouseLeave() {
-        hoveredExpandedIdx = null;
-    }
-
-    function handleSuggestionClick(item) {
-        hoveredExpandedIdx = null;
-        if (!item) return;
+    function handleSlotClick(slot) {
+        if (!slot || slot.type === 'empty' || !slot.item) return;
+        const item = slot.item;
         if (item.id) {
             RecordItemUsage(item.id);
         }
@@ -533,7 +603,7 @@
             } else {
                 HideAndRestore();
             }
-        }).catch(err => console.error("Suggestion copy failed:", err));
+        }).catch(err => console.error("Slot copy failed:", err));
     }
 
     function handleSearchResultClick(result) {
@@ -600,27 +670,29 @@
     }
 
     function handleGlobalKeydown(e) {
-        if (showTextInput || showDirInput || showDeleteConfirm || showSettings) {
+        if (showTextInput || showDirInput || showDeleteConfirm || showSlotConfirm || showSettings) {
             return;
         }
         if (document.activeElement && document.activeElement.classList.contains('paste-toggle')) {
             return;
         }
 
-        // 仅当且仅当恰好只有 1 个常用胶囊时，敲回车直接点击胶囊
-        if (suggestedItems && suggestedItems.length === 1) {
+        // 仅当且仅当恰好只有 1 个有效常用胶囊时，敲回车直接触发
+        if (activeSlotsCount === 1 && !searchQuery.trim()) {
             if (e.key === 'Enter') {
-                if (searchQuery.trim()) return;
                 e.preventDefault();
-                handleSuggestionClick(suggestedItems[0]);
+                handleSlotClick(activeSlots[0]);
                 return;
             }
-        } else if (suggestedItems && suggestedItems.length > 1) {
-            // 多个胶囊时启用各个胶囊的独立快捷键
-            for (let i = 0; i < suggestedItems.length && i < 3; i++) {
-                if (matchesShortcut(e, capsuleShortcuts[i])) {
+        }
+
+        // 匹配 3 个槽位的独立快捷键 (Alt+1, Alt+2, Alt+3)
+        for (let i = 0; i < 3; i++) {
+            if (matchesShortcut(e, capsuleShortcuts[i])) {
+                const slot = capsuleSlots[i];
+                if (slot && slot.type !== 'empty' && slot.item) {
                     e.preventDefault();
-                    handleSuggestionClick(suggestedItems[i]);
+                    handleSlotClick(slot);
                     return;
                 }
             }
@@ -629,9 +701,9 @@
 
     function handleSearchKeydown(e) {
         if (e.key === 'Enter') {
-            if (!searchQuery.trim() && suggestedItems && suggestedItems.length === 1) {
+            if (!searchQuery.trim() && activeSlotsCount === 1) {
                 e.preventDefault();
-                handleSuggestionClick(suggestedItems[0]);
+                handleSlotClick(activeSlots[0]);
             } else if (searchQuery.trim() && searchResults.length > 0) {
                 e.preventDefault();
                 handleSearchResultClick(searchResults[0]);
@@ -642,7 +714,6 @@
 
 <svelte:window 
     on:blur={() => handleBlur()} 
-    on:resize={() => updateTruncationStatus()}
     on:keydown={handleGlobalKeydown}
 />
 
@@ -689,43 +760,77 @@
                 </div>
             </div>
 
-            {#if suggestedItems && suggestedItems.length > 0 && !searchQuery.trim()}
-                <div class="suggestion-bar" transition:slide={{ duration: 160, easing: cubicOut }}>
-                    <span class="suggestion-tag">常用</span>
-                    <div class="suggestion-chips" class:has-expanded={hoveredExpandedIdx !== null}>
-                        {#each suggestedItems as item, idx}
-                            <button 
-                                class="suggestion-chip" 
-                                class:hover-expand={hoveredExpandedIdx === idx}
-                                on:mouseenter={(e) => handleChipMouseEnter(e, idx)}
-                                on:mouseleave={handleChipMouseLeave}
-                                on:focus={(e) => handleChipMouseEnter(e, idx)}
-                                on:blur={handleChipMouseLeave}
-                                on:click={() => handleSuggestionClick(item)}
-                                on:contextmenu={(e) => handleCapsuleContextMenu(e, item)}
-                                title={item.value || ''}
-                            >
-                                <svg class="chip-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14 2 14 8 20 8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                </svg>
-                                <span class="chip-title">{item.name}</span>
-                                {#if suggestedItems.length === 1}
-                                    <span class="chip-badge enter-badge always-visible">
-                                        <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                                            <polyline points="9 10 4 15 9 20"></polyline>
-                                            <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
-                                        </svg>
-                                        <span>Enter</span>
-                                    </span>
-                                {:else if getCapsuleBadgeLabel(idx)}
-                                    <span class="chip-badge shortcut-badge">
-                                        <span>{getCapsuleBadgeLabel(idx)}</span>
-                                    </span>
-                                {/if}
-                            </button>
+            {#if hasActiveSlots && !searchQuery.trim()}
+                <div class="suggestion-bar-vertical" transition:slide={{ duration: 160, easing: cubicOut }}>
+                    <div class="suggestion-tag">
+                        <span>常</span>
+                        <span>用</span>
+                    </div>
+                    <div class="suggestion-slot-list">
+                        {#each capsuleSlots as slot, idx}
+                            {#if slot.type === 'pinned' && slot.item}
+                                <button 
+                                    class="slot-item pinned"
+                                    on:click={() => handleSlotClick(slot)}
+                                    on:contextmenu={(e) => handleCapsuleContextMenu(e, slot)}
+                                    title={slot.item.value || ''}
+                                >
+                                    <svg class="slot-pin-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="17" x2="12" y2="22"></line>
+                                        <path d="M5 17h14v-2l-2-2V5h1V3H6v2h1v8l-2 2v2z"></path>
+                                    </svg>
+                                    <span class="slot-title">{slot.item.name}</span>
+                                    {#if activeSlotsCount === 1}
+                                        <span class="slot-badge enter-badge">
+                                            <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="9 10 4 15 9 20"></polyline>
+                                                <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                                            </svg>
+                                            <span>Enter</span>
+                                        </span>
+                                    {:else if getCapsuleBadgeLabel(idx)}
+                                        <span class="slot-badge shortcut-badge">
+                                            <span>{getCapsuleBadgeLabel(idx)}</span>
+                                        </span>
+                                    {/if}
+                                </button>
+                            {:else if slot.type === 'auto' && slot.item}
+                                <button 
+                                    class="slot-item auto"
+                                    on:click={() => handleSlotClick(slot)}
+                                    on:contextmenu={(e) => handleCapsuleContextMenu(e, slot)}
+                                    title={slot.item.value || ''}
+                                >
+                                    <!-- 自动频次不加符号 -->
+                                    <span class="slot-title">{slot.item.name}</span>
+                                    {#if activeSlotsCount === 1}
+                                        <span class="slot-badge enter-badge">
+                                            <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="9 10 4 15 9 20"></polyline>
+                                                <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                                            </svg>
+                                            <span>Enter</span>
+                                        </span>
+                                    {:else if getCapsuleBadgeLabel(idx)}
+                                        <span class="slot-badge shortcut-badge">
+                                            <span>{getCapsuleBadgeLabel(idx)}</span>
+                                        </span>
+                                    {/if}
+                                </button>
+                            {:else}
+                                <div class="slot-item empty" title="右键下方列表条目可固定至此槽位">
+                                    <svg class="slot-empty-svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    <span class="slot-title empty-label">待分配</span>
+                                    {#if getCapsuleBadgeLabel(idx)}
+                                        <span class="slot-badge empty-badge">
+                                            <span>{getCapsuleBadgeLabel(idx)}</span>
+                                        </span>
+                                    {/if}
+                                </div>
+                            {/if}
                         {/each}
                     </div>
                 </div>
@@ -783,12 +888,18 @@
     flipY={globalContextMenu.flipY}
     targetNode={globalContextMenu.targetNode}
     isCapsule={globalContextMenu.isCapsule}
+    capsuleSlot={globalContextMenu.capsuleSlot}
+    slots={capsuleSlots}
+    capsuleShortcuts={capsuleShortcuts}
     on:addText={addText}
     on:addDir={addDir}
     on:editText={editText}
     on:editDir={editDir}
     on:removeCapsule={removeCapsule}
     on:delete={deleteItem}
+    on:assignSlot={handleAssignSlot}
+    on:unpinSlot={handleUnpinSlot}
+    on:pinHere={handlePinHere}
 />
 
 <DirModal 
@@ -816,6 +927,17 @@
     cancelText="取消"
     on:confirm={confirmDeleteItem}
     on:cancel={cancelDelete}
+/>
+
+<ConfirmModal 
+    visible={showSlotConfirm}
+    title="替换常用槽位"
+    message={pendingSlotTarget.newNode && pendingSlotTarget.currentItem ? `槽位 ${pendingSlotTarget.slot} 当前为 "${pendingSlotTarget.currentItem.name}"，确定替换为 "${pendingSlotTarget.newNode.name}" 吗？` : ''}
+    confirmText="确认替换"
+    cancelText="取消"
+    confirmType="primary"
+    on:confirm={confirmSlotReplace}
+    on:cancel={cancelSlotReplace}
 />
 
 <style>
@@ -855,136 +977,141 @@
         height: 28px;
     }
 
-    .suggestion-bar {
+    .suggestion-bar-vertical {
         display: flex;
-        align-items: center;
-        gap: 7px;
+        align-items: stretch;
+        gap: 6px;
         margin-top: 6px;
         padding-top: 5px;
         border-top: 1px solid rgba(71, 85, 105, 0.09);
-        overflow: hidden;
     }
 
     .suggestion-tag {
         flex-shrink: 0;
-        display: inline-flex;
+        display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 20px;
-        padding: 0 6px;
+        gap: 6px;
+        width: 22px;
+        box-sizing: border-box;
         font-size: 11px;
         font-weight: 600;
         color: #475569;
-        background: rgba(71, 85, 105, 0.07);
+        background: rgba(71, 85, 105, 0.06);
         border: 1px solid rgba(71, 85, 105, 0.12);
-        border-radius: 5px;
-        letter-spacing: 0.3px;
+        border-radius: 6px;
         user-select: none;
+        padding: 4px 0;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
     }
 
-    .suggestion-chips {
+    .suggestion-tag span {
+        line-height: 1;
+        display: block;
+    }
+
+    .suggestion-slot-list {
         display: flex;
-        align-items: center;
-        gap: 5px;
-        overflow: hidden;
+        flex-direction: column;
+        gap: 3px;
         flex: 1;
         min-width: 0;
-        height: var(--app-chip-height, 24px);
     }
 
-    .suggestion-chip {
-        display: inline-flex;
+    .slot-item {
+        display: flex;
         align-items: center;
-        gap: 5px;
-        padding: 0 8px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        border-radius: 12px;
-        font-size: var(--app-font-size, 13px);
-        font-weight: 550;
-        color: #1e293b;
-        cursor: pointer;
+        gap: 6px;
         height: var(--app-chip-height, 24px);
+        padding: 0 8px;
+        border-radius: 6px;
+        font-size: var(--app-font-size, 13px);
+        width: 100%;
         box-sizing: border-box;
-        white-space: nowrap;
-        overflow: hidden;
-        /* 默认等分占比 1:1:1 */
-        flex: 1 1 0;
-        min-width: 28px;
-        /* 拟物磨砂质感：高光顶缘 + 板岩微柔光阴影，不靠明艳高饱和颜色，自然浮现立体层次 */
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.95),
-            0 1px 2px rgba(15, 23, 42, 0.04),
-            0 2px 4px rgba(15, 23, 42, 0.02);
-        /* iOS 弹簧贝塞尔曲线 (与 Auto Paste 保持一致) */
-        transition: flex 0.38s cubic-bezier(0.34, 1.4, 0.64, 1),
-                    background-color 0.2s ease,
-                    border-color 0.2s ease,
-                    box-shadow 0.2s ease,
-                    color 0.2s ease,
-                    padding 0.28s ease,
-                    opacity 0.2s ease;
+        text-align: left;
+        user-select: none;
+        transition: all 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
     }
 
-    .chip-icon {
-        flex-shrink: 0;
-        color: #64748b;
-        opacity: 0.85;
-        transition: color 0.18s ease, opacity 0.18s ease;
-    }
-
-    .suggestion-chip:hover {
-        background: rgba(255, 255, 255, 0.94);
-        border-color: rgba(100, 116, 139, 0.36);
+    /* 手动固定项 (Pinned): 纯净白底、实体高光微光、细线边框、图钉图标 */
+    .slot-item.pinned {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(100, 135, 175, 0.42);
         color: #0f172a;
+        font-weight: 550;
+        cursor: pointer;
         box-shadow:
             inset 0 1px 0 #ffffff,
-            0 2px 6px rgba(15, 23, 42, 0.07),
-            0 0 0 1px rgba(148, 163, 184, 0.1);
+            0 1px 3px rgba(15, 23, 42, 0.05);
     }
 
-    .suggestion-chip:hover .chip-icon {
-        color: #334155;
-        opacity: 1;
-    }
-
-    /* 当存在展开项时，压缩未悬停的兄弟项 */
-    .suggestion-chips.has-expanded .suggestion-chip:not(.hover-expand) {
-        flex: 0.5 1 0;
-        padding: 0 7px;
-        opacity: 0.65;
-        background: rgba(255, 255, 255, 0.45);
-        border-color: rgba(148, 163, 184, 0.2);
-    }
-
-    /* 截断项悬停展开：纯净白玉浮雕微光 */
-    .suggestion-chip.hover-expand {
-        flex: 3.5 1 0;
+    .slot-item.pinned:hover {
         background: #ffffff;
-        border-color: rgba(71, 85, 105, 0.42);
+        border-color: rgba(70, 115, 165, 0.65);
+        box-shadow:
+            inset 0 1px 0 #ffffff,
+            0 2px 7px rgba(15, 23, 42, 0.08);
+    }
+
+    .slot-pin-svg {
+        flex-shrink: 0;
+        color: #2563eb;
+        opacity: 0.95;
+    }
+
+    /* 自动高频项 (Auto): 半透明磨砂、无图标、标准字重 */
+    .slot-item.auto {
+        background: rgba(255, 255, 255, 0.64);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        color: #1e293b;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.9),
+            0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+
+    .slot-item.auto:hover {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(100, 116, 139, 0.38);
         color: #0f172a;
         box-shadow:
             inset 0 1px 0 #ffffff,
-            0 3px 10px rgba(15, 23, 42, 0.09),
-            0 0 0 1px rgba(71, 85, 105, 0.12);
+            0 2px 6px rgba(15, 23, 42, 0.06);
     }
 
-    .suggestion-chip.hover-expand .chip-icon {
-        color: #1e293b;
-        opacity: 1;
+    /* 空槽 (Empty): 浅灰虚线边框、半透明文字、加号提示 */
+    .slot-item.empty {
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px dashed rgba(148, 163, 184, 0.38);
+        color: #94a3b8;
+        cursor: default;
     }
 
-    .chip-title {
+    .slot-empty-svg {
+        flex-shrink: 0;
+        color: #94a3b8;
+        opacity: 0.75;
+    }
+
+    .empty-label {
+        font-style: italic;
+        color: #94a3b8 !important;
+        font-weight: 400 !important;
+    }
+
+    .slot-title {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1 1 auto;
         min-width: 0;
-        text-align: left;
         line-height: var(--app-chip-height, 24px);
     }
 
-    .chip-badge {
+    /* 快捷键徽标 */
+    .slot-badge {
         flex-shrink: 0;
         display: inline-flex;
         align-items: center;
@@ -997,80 +1124,46 @@
         user-select: none;
         pointer-events: none;
         white-space: nowrap;
-        color: #2b5074;
-        background: rgba(240, 246, 252, 0.94);
-        box-shadow:
-            0 1px 2px rgba(15, 23, 42, 0.05),
-            inset 0 1px 0 rgba(255, 255, 255, 0.95);
-        transition: max-width 0.25s cubic-bezier(0.34, 1.3, 0.64, 1),
-                    opacity 0.2s ease,
-                    padding 0.25s ease,
-                    margin-left 0.25s ease,
-                    border-width 0.2s ease,
-                    background-color 0.18s ease,
-                    color 0.18s ease,
-                    box-shadow 0.18s ease;
-    }
-
-    /* 多胶囊快捷键徽标：默认完全折叠隐藏，hover展开时显现 */
-    .chip-badge.shortcut-badge {
-        max-width: 0;
-        opacity: 0;
-        padding: 2.5px 0;
-        margin-left: 0;
-        overflow: hidden;
-        border: 0 solid rgba(140, 170, 200, 0.42);
-    }
-
-    .suggestion-chip:hover .chip-badge.shortcut-badge,
-    .suggestion-chip:focus .chip-badge.shortcut-badge,
-    .suggestion-chip.hover-expand .chip-badge.shortcut-badge {
-        opacity: 1;
-        max-width: 90px;
         padding: 2.5px 6.5px;
         margin-left: 6px;
-        border: 1px solid rgba(90, 130, 168, 0.55);
-        border-bottom: 1.5px solid rgba(70, 115, 155, 0.8);
-        background: #ffffff;
-        color: #1a4266;
-        box-shadow:
-            0 2px 5px rgba(25, 45, 70, 0.09),
-            inset 0 1px 0 #ffffff;
     }
 
-    /* 单胶囊 Enter 徽标：始终完整显示，不折叠 */
-    .chip-badge.always-visible {
-        opacity: 1;
-        max-width: none;
-        padding: 2.5px 7px;
-        margin-left: 6px;
-        overflow: visible;
-        font-size: 11.5px;
+    .slot-badge.shortcut-badge {
         border: 1px solid rgba(140, 170, 200, 0.45);
         border-bottom: 1.5px solid rgba(110, 145, 180, 0.68);
-    }
-
-    .suggestion-chip:hover .chip-badge.always-visible,
-    .suggestion-chip:focus .chip-badge.always-visible {
-        border-color: rgba(90, 130, 168, 0.6);
-        border-bottom: 1.5px solid rgba(70, 115, 155, 0.85);
         background: #ffffff;
         color: #1a4266;
         box-shadow:
-            0 2px 5px rgba(25, 45, 70, 0.09),
+            0 1px 2px rgba(25, 45, 70, 0.06),
             inset 0 1px 0 #ffffff;
     }
 
-    .chip-badge .enter-icon {
-        opacity: 0.8;
-        flex-shrink: 0;
-        transition: opacity 0.18s ease, transform 0.18s ease;
+    .slot-item.pinned .slot-badge.shortcut-badge {
+        border-color: rgba(37, 99, 235, 0.42);
+        border-bottom-color: rgba(29, 78, 216, 0.7);
+        color: #1d4ed8;
     }
 
-    .suggestion-chip:hover .chip-badge .enter-icon,
-    .suggestion-chip:focus .chip-badge .enter-icon {
-        opacity: 1;
-        transform: translateX(-1px);
+    .slot-badge.enter-badge {
+        border: 1px solid rgba(140, 170, 200, 0.45);
+        border-bottom: 1.5px solid rgba(110, 145, 180, 0.68);
+        background: #ffffff;
+        color: #1a4266;
+        box-shadow:
+            0 1px 2px rgba(25, 45, 70, 0.06),
+            inset 0 1px 0 #ffffff;
+    }
+
+    .slot-badge.empty-badge {
+        border: 1px dashed rgba(148, 163, 184, 0.32);
+        background: transparent;
+        color: #94a3b8;
+        opacity: 0.75;
+    }
+
+    .slot-badge .enter-icon {
+        opacity: 0.8;
+        flex-shrink: 0;
     }
 
     .search-wrapper {

@@ -18,6 +18,10 @@ export function GetContent() {
   return window['go']['main']['App']['GetContent']();
 }
 
+export function GetContextSlots() {
+  return window['go']['main']['App']['GetContextSlots']();
+}
+
 export function GetContextSuggestions() {
   return window['go']['main']['App']['GetContextSuggestions']();
 }
@@ -42,16 +46,20 @@ export function PasteAndHide() {
   return window['go']['main']['App']['PasteAndHide']();
 }
 
+export function PinSlot(arg1, arg2) {
+  return window['go']['main']['App']['PinSlot'](arg1, arg2);
+}
+
 export function RecordItemUsage(arg1) {
   return window['go']['main']['App']['RecordItemUsage'](arg1);
 }
 
-export function RemoveItemUsage(arg1) {
-  return window['go']['main']['App']['RemoveItemUsage'](arg1);
-}
-
 export function RegisterGlobalHotkey(arg1, arg2) {
   return window['go']['main']['App']['RegisterGlobalHotkey'](arg1, arg2);
+}
+
+export function RemoveItemUsage(arg1) {
+  return window['go']['main']['App']['RemoveItemUsage'](arg1);
 }
 
 export function SaveContent(arg1) {
@@ -68,6 +76,10 @@ export function SetOpacity(arg1) {
 
 export function ToggleWindow() {
   return window['go']['main']['App']['ToggleWindow']();
+}
+
+export function UnpinSlot(arg1) {
+  return window['go']['main']['App']['UnpinSlot'](arg1);
 }
 
 export function UpdateConfig(arg1) {
