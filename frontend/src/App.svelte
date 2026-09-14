@@ -631,6 +631,12 @@
         return `${mod}+${key}`;
     }
 
+    function isEnterKey(shortcut) {
+        if (!shortcut || !Array.isArray(shortcut)) return false;
+        const key = (shortcut[1] || '').toLowerCase();
+        return key === 'enter' || key === 'return';
+    }
+
     function matchesShortcut(event, shortcut) {
         if (!shortcut || !Array.isArray(shortcut) || shortcut.length < 2) return false;
         const [mod, key] = shortcut;
@@ -643,7 +649,7 @@
         const noMod = !mod || mod === 'None' || mod === '';
 
         if (noMod) {
-            if (event.altKey || event.ctrlKey || event.metaKey) return false;
+            if (event.altKey || event.ctrlKey || event.shiftKey || event.metaKey) return false;
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return false;
         } else {
@@ -686,7 +692,7 @@
             }
         }
 
-        // 匹配 3 个槽位的独立快捷键 (Alt+1, Alt+2, Alt+3)
+        // 匹配 3 个槽位的独立快捷键 (如 Alt+1, Alt+2, Alt+3, None+Enter 等)
         for (let i = 0; i < 3; i++) {
             if (matchesShortcut(e, capsuleShortcuts[i])) {
                 const slot = capsuleSlots[i];
@@ -701,12 +707,31 @@
 
     function handleSearchKeydown(e) {
         if (e.key === 'Enter') {
-            if (!searchQuery.trim() && activeSlotsCount === 1) {
-                e.preventDefault();
-                handleSlotClick(activeSlots[0]);
-            } else if (searchQuery.trim() && searchResults.length > 0) {
-                e.preventDefault();
-                handleSearchResultClick(searchResults[0]);
+            if (searchQuery.trim()) {
+                if (searchResults.length > 0) {
+                    e.preventDefault();
+                    handleSearchResultClick(searchResults[0]);
+                }
+            } else {
+                // 搜索框为空时按回车：
+                // 1. 若恰好只有 1 个有效胶囊，默认直接触发该有效胶囊
+                if (activeSlotsCount === 1) {
+                    e.preventDefault();
+                    handleSlotClick(activeSlots[0]);
+                    return;
+                }
+                // 2. 检查是否有胶囊被配置为无修饰键回车 (None + Enter)
+                for (let i = 0; i < 3; i++) {
+                    const sc = capsuleShortcuts[i];
+                    if (sc && (!sc[0] || sc[0] === 'None') && (sc[1]?.toLowerCase() === 'enter' || sc[1]?.toLowerCase() === 'return')) {
+                        const slot = capsuleSlots[i];
+                        if (slot && slot.type !== 'empty' && slot.item) {
+                            e.preventDefault();
+                            handleSlotClick(slot);
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
@@ -789,7 +814,13 @@
                                             <span>Enter</span>
                                         </span>
                                     {:else if getCapsuleBadgeLabel(idx)}
-                                        <span class="slot-badge shortcut-badge">
+                                        <span class="slot-badge {isEnterKey(capsuleShortcuts[idx]) ? 'enter-badge' : 'shortcut-badge'}">
+                                            {#if isEnterKey(capsuleShortcuts[idx])}
+                                                <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="9 10 4 15 9 20"></polyline>
+                                                    <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                                                </svg>
+                                            {/if}
                                             <span>{getCapsuleBadgeLabel(idx)}</span>
                                         </span>
                                     {/if}
@@ -812,7 +843,13 @@
                                             <span>Enter</span>
                                         </span>
                                     {:else if getCapsuleBadgeLabel(idx)}
-                                        <span class="slot-badge shortcut-badge">
+                                        <span class="slot-badge {isEnterKey(capsuleShortcuts[idx]) ? 'enter-badge' : 'shortcut-badge'}">
+                                            {#if isEnterKey(capsuleShortcuts[idx])}
+                                                <svg class="enter-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="9 10 4 15 9 20"></polyline>
+                                                    <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                                                </svg>
+                                            {/if}
                                             <span>{getCapsuleBadgeLabel(idx)}</span>
                                         </span>
                                     {/if}

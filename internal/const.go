@@ -49,6 +49,7 @@ var HotKeyMap = map[string]any{
 	"Z":     hotkey.KeyZ,
 
 	"Return": hotkey.KeyReturn,
+	"Enter":  hotkey.KeyReturn,
 	"Escape": hotkey.KeyEscape,
 	"Delete": hotkey.KeyDelete,
 	"Tab":    hotkey.KeyTab,

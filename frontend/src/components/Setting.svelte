@@ -1,5 +1,5 @@
 <script>
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher, onMount, tick } from 'svelte';
     import { fade, fly } from 'svelte/transition';
     import { GetConfig, UpdateConfig, RegisterGlobalHotkey, SetOpacity, SetFontSizeLevel } from "../../wailsjs/go/main/App";
     import { ToggleAutoStart, IsAutoStartCheck } from "../../wailsjs/go/internal/AppService";
@@ -13,9 +13,9 @@
     let activeTab = 'appearance'; // 'appearance' | 'shortcuts' | 'general'
     const modifiers = ["Alt", "Ctrl", "Shift", "Win"];
     const capsuleModifiers = ["None", "Alt", "Ctrl", "Shift", "Win"];
-    const keys = ["Space", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Return", "Escape", "Delete", "Tab", "Left", "Right", "Up", "Down", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
-    let selectedMod = "";
-    let selectedKey = "";
+    const keys = ["Space", "Enter", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Escape", "Delete", "Tab", "Left", "Right", "Up", "Down", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
+    let selectedMod = "Alt";
+    let selectedKey = "Space";
     let cap1Mod = "Alt";
     let cap1Key = "1";
     let cap2Mod = "Alt";
@@ -24,24 +24,56 @@
     let cap3Key = "3";
     let currentFontLevel = 2;
 
-    $: if (config && config.shortcuts) {
-        if (!selectedMod && config.shortcuts.wakeUp) {
-            selectedMod = config.shortcuts.wakeUp[0] || "Alt";
-            selectedKey = config.shortcuts.wakeUp[1] || "Space";
-        }
-        if (config.shortcuts.capsule1) {
-            cap1Mod = config.shortcuts.capsule1[0] || "Alt";
-            cap1Key = config.shortcuts.capsule1[1] || "1";
-        }
-        if (config.shortcuts.capsule2) {
-            cap2Mod = config.shortcuts.capsule2[0] || "Alt";
-            cap2Key = config.shortcuts.capsule2[1] || "2";
-        }
-        if (config.shortcuts.capsule3) {
-            cap3Mod = config.shortcuts.capsule3[0] || "Alt";
-            cap3Key = config.shortcuts.capsule3[1] || "3";
-        }
+    // --- 快捷键冲突检测 ---
+    function normalizeShortcut(mod, key) {
+        if (!key) return "";
+        const m = (!mod || mod === "None") ? "" : mod.toLowerCase();
+        let k = key.toLowerCase();
+        if (k === "return") k = "enter";
+        return m ? `${m}+${k}` : k;
     }
+
+    $: wakeUpNorm = normalizeShortcut(selectedMod, selectedKey);
+    $: cap1Norm = normalizeShortcut(cap1Mod, cap1Key);
+    $: cap2Norm = normalizeShortcut(cap2Mod, cap2Key);
+    $: cap3Norm = normalizeShortcut(cap3Mod, cap3Key);
+
+    $: wakeUpConflict = (() => {
+        if (!wakeUpNorm) return '';
+        if (wakeUpNorm === cap1Norm) return '与胶囊 1 快捷键冲突';
+        if (wakeUpNorm === cap2Norm) return '与胶囊 2 快捷键冲突';
+        if (wakeUpNorm === cap3Norm) return '与胶囊 3 快捷键冲突';
+        return '';
+    })();
+
+    $: cap1Conflict = (() => {
+        if (!cap1Norm) return '';
+        if (cap1Norm === 'escape') return 'Escape 用于退出窗口，不可设为快捷键';
+        if (cap1Norm === wakeUpNorm) return '与全局呼出按键冲突';
+        if (cap1Norm === cap2Norm) return '与胶囊 2 快捷键冲突';
+        if (cap1Norm === cap3Norm) return '与胶囊 3 快捷键冲突';
+        return '';
+    })();
+
+    $: cap2Conflict = (() => {
+        if (!cap2Norm) return '';
+        if (cap2Norm === 'escape') return 'Escape 用于退出窗口，不可设为快捷键';
+        if (cap2Norm === wakeUpNorm) return '与全局呼出按键冲突';
+        if (cap2Norm === cap1Norm) return '与胶囊 1 快捷键冲突';
+        if (cap2Norm === cap3Norm) return '与胶囊 3 快捷键冲突';
+        return '';
+    })();
+
+    $: cap3Conflict = (() => {
+        if (!cap3Norm) return '';
+        if (cap3Norm === 'escape') return 'Escape 用于退出窗口，不可设为快捷键';
+        if (cap3Norm === wakeUpNorm) return '与全局呼出按键冲突';
+        if (cap3Norm === cap1Norm) return '与胶囊 1 快捷键冲突';
+        if (cap3Norm === cap2Norm) return '与胶囊 2 快捷键冲突';
+        return '';
+    })();
+
+    $: hasConflict = Boolean(wakeUpConflict || cap1Conflict || cap2Conflict || cap3Conflict);
 
     $: if (config && config.appearance && config.appearance.fontSizeLevel) {
         currentFontLevel = Number(config.appearance.fontSizeLevel);
@@ -59,20 +91,24 @@
         SetFontSizeLevel(lvl);
     }
 
-    function updateHotkey() {
+    function commitShortcuts() {
+        if (!config || !config.shortcuts) return;
+        if (hasConflict) {
+            LogInfo("快捷键配置存在冲突，暂缓写入配置");
+            return;
+        }
         config.shortcuts.wakeUp = [selectedMod, selectedKey];
-        LogInfo("新快捷键:" + config.shortcuts.wakeUp);
+        config.shortcuts.capsule1 = [cap1Mod, cap1Key];
+        config.shortcuts.capsule2 = [cap2Mod, cap2Key];
+        config.shortcuts.capsule3 = [cap3Mod, cap3Key];
+        LogInfo(`快捷键已保存: 全局=${selectedMod}+${selectedKey}, 胶囊=[${cap1Mod}+${cap1Key}, ${cap2Mod}+${cap2Key}, ${cap3Mod}+${cap3Key}]`);
         RegisterGlobalHotkey(config.shortcuts.wakeUp[0], config.shortcuts.wakeUp[1]);
         UpdateConfig(config);
     }
 
-    function updateCapsuleHotkeys() {
-        if (!config || !config.shortcuts) return;
-        config.shortcuts.capsule1 = [cap1Mod, cap1Key];
-        config.shortcuts.capsule2 = [cap2Mod, cap2Key];
-        config.shortcuts.capsule3 = [cap3Mod, cap3Key];
-        LogInfo(`胶囊快捷键更新: ${cap1Mod}+${cap1Key}, ${cap2Mod}+${cap2Key}, ${cap3Mod}+${cap3Key}`);
-        UpdateConfig(config);
+    async function handleShortcutChange() {
+        await tick();
+        commitShortcuts();
     }
 
     function updateOpacity() {
@@ -108,10 +144,34 @@
         }
     }
 
+    function sanitizeKey(k) {
+        if (!k) return k;
+        if (k.toLowerCase() === 'return') return 'Enter';
+        return k;
+    }
+
     onMount(async () => {
         try {
             const rawConfig = await GetConfig();
             config = internal.Config.createFrom(rawConfig);
+            if (config && config.shortcuts) {
+                if (config.shortcuts.wakeUp) {
+                    selectedMod = config.shortcuts.wakeUp[0] || "Alt";
+                    selectedKey = sanitizeKey(config.shortcuts.wakeUp[1]) || "Space";
+                }
+                if (config.shortcuts.capsule1) {
+                    cap1Mod = config.shortcuts.capsule1[0] || "Alt";
+                    cap1Key = sanitizeKey(config.shortcuts.capsule1[1]) || "1";
+                }
+                if (config.shortcuts.capsule2) {
+                    cap2Mod = config.shortcuts.capsule2[0] || "Alt";
+                    cap2Key = sanitizeKey(config.shortcuts.capsule2[1]) || "2";
+                }
+                if (config.shortcuts.capsule3) {
+                    cap3Mod = config.shortcuts.capsule3[0] || "Alt";
+                    cap3Key = sanitizeKey(config.shortcuts.capsule3[1]) || "3";
+                }
+            }
             if (config && config.appearance && config.appearance.fontSizeLevel) {
                 currentFontLevel = Number(config.appearance.fontSizeLevel);
             }
@@ -235,7 +295,7 @@
 
                     <!-- 窗口透明度 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">窗口透明度</div>
                             <div class="setting-desc">调节毛玻璃界面的整体透度</div>
                         </div>
@@ -256,20 +316,51 @@
 
             {:else if activeTab === 'shortcuts'}
                 <div class="setting-card" in:fade={{ duration: 140 }}>
+                    {#if hasConflict}
+                        <div class="conflict-alert-banner">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <span>快捷键存在冲突，请调整标红的配置项以使其生效</span>
+                        </div>
+                    {/if}
+
                     <!-- 唤醒快捷键 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">全局呼出按键</div>
                             <div class="setting-desc">快速呼出主界面快捷键</div>
+                            {#if wakeUpConflict}
+                                <div class="shortcut-conflict-msg">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    <span>{wakeUpConflict}</span>
+                                </div>
+                            {/if}
                         </div>
                         <div class="hotkey-wrapper">
-                            <select class="styled-select" bind:value={selectedMod} on:change={updateHotkey}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(wakeUpConflict)} 
+                                bind:value={selectedMod} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each modifiers as mod}
                                     <option value={mod}>{mod}</option>
                                 {/each}
                             </select>
                             <span class="hotkey-plus">+</span>
-                            <select class="styled-select" bind:value={selectedKey} on:change={updateHotkey}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(wakeUpConflict)} 
+                                bind:value={selectedKey} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each keys as key}
                                     <option value={key}>{key}</option>
                                 {/each}
@@ -280,18 +371,39 @@
 
                     <!-- 胶囊 1 快捷键 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">胶囊 1 快捷键</div>
-                            <div class="setting-desc">多胶囊时首个常用胶囊快捷键</div>
+                            <div class="setting-desc">多胶囊时首个常用胶囊快捷键
+                                （支持设置: 无 + Enter）</div>
+                            {#if cap1Conflict}
+                                <div class="shortcut-conflict-msg">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    <span>{cap1Conflict}</span>
+                                </div>
+                            {/if}
                         </div>
                         <div class="hotkey-wrapper">
-                            <select class="styled-select" bind:value={cap1Mod} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap1Conflict)} 
+                                bind:value={cap1Mod} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each capsuleModifiers as mod}
                                     <option value={mod}>{mod === 'None' ? '无' : mod}</option>
                                 {/each}
                             </select>
                             <span class="hotkey-plus">+</span>
-                            <select class="styled-select" bind:value={cap1Key} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap1Conflict)} 
+                                bind:value={cap1Key} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each keys as key}
                                     <option value={key}>{key}</option>
                                 {/each}
@@ -303,18 +415,38 @@
 
                     <!-- 胶囊 2 快捷键 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">胶囊 2 快捷键</div>
                             <div class="setting-desc">多胶囊时第二常用胶囊快捷键</div>
+                            {#if cap2Conflict}
+                                <div class="shortcut-conflict-msg">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    <span>{cap2Conflict}</span>
+                                </div>
+                            {/if}
                         </div>
                         <div class="hotkey-wrapper">
-                            <select class="styled-select" bind:value={cap2Mod} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap2Conflict)} 
+                                bind:value={cap2Mod} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each capsuleModifiers as mod}
                                     <option value={mod}>{mod === 'None' ? '无' : mod}</option>
                                 {/each}
                             </select>
                             <span class="hotkey-plus">+</span>
-                            <select class="styled-select" bind:value={cap2Key} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap2Conflict)} 
+                                bind:value={cap2Key} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each keys as key}
                                     <option value={key}>{key}</option>
                                 {/each}
@@ -326,18 +458,38 @@
 
                     <!-- 胶囊 3 快捷键 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">胶囊 3 快捷键</div>
                             <div class="setting-desc">多胶囊时第三常用胶囊快捷键</div>
+                            {#if cap3Conflict}
+                                <div class="shortcut-conflict-msg">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    <span>{cap3Conflict}</span>
+                                </div>
+                            {/if}
                         </div>
                         <div class="hotkey-wrapper">
-                            <select class="styled-select" bind:value={cap3Mod} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap3Conflict)} 
+                                bind:value={cap3Mod} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each capsuleModifiers as mod}
                                     <option value={mod}>{mod === 'None' ? '无' : mod}</option>
                                 {/each}
                             </select>
                             <span class="hotkey-plus">+</span>
-                            <select class="styled-select" bind:value={cap3Key} on:change={updateCapsuleHotkeys}>
+                            <select 
+                                class="styled-select" 
+                                class:input-conflict={Boolean(cap3Conflict)} 
+                                bind:value={cap3Key} 
+                                on:change={handleShortcutChange}
+                            >
                                 {#each keys as key}
                                     <option value={key}>{key}</option>
                                 {/each}
@@ -349,7 +501,7 @@
 
                     <!-- 粘贴缓冲时间 -->
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">粘贴缓冲延时</div>
                             <div class="setting-desc">模拟发送粘贴的安全缓冲时间</div>
                         </div>
@@ -360,7 +512,7 @@
                                 min="25" 
                                 max="800" 
                                 step="25" 
-                                bind:value={config.shortcuts.pasteWaitTime}
+                                bind:value={config.shortcuts.pasteWaitTime} 
                                 on:change={updatePasteWaitTime}
                             >
                             <span class="range-val">{config.shortcuts.pasteWaitTime}ms</span>
@@ -371,7 +523,7 @@
             {:else if activeTab === 'general'}
                 <div class="setting-card" in:fade={{ duration: 140 }}>
                     <div class="setting-row">
-                        <div>
+                        <div class="setting-info">
                             <div class="setting-label">开机自启</div>
                             <div class="setting-desc">登录 Windows 时自动在后台运行</div>
                         </div>
@@ -409,6 +561,7 @@
         overflow: hidden;
         background: transparent;
         user-select: none;
+        text-align: left;
     }
 
     /* --- 顶栏：克制无反光 --- */
@@ -528,12 +681,23 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        text-align: left;
+    }
+
+    .setting-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+        min-width: 0;
+        flex: 1;
     }
 
     .setting-col {
         display: flex;
         flex-direction: column;
         gap: 8px;
+        text-align: left;
     }
 
     .setting-header-row {
@@ -546,12 +710,15 @@
         font-size: 13px;
         font-weight: 550;
         color: #1e293b;
+        text-align: left;
     }
 
     .setting-desc {
         font-size: 11px;
         color: #64748b;
         margin-top: 2px;
+        text-align: left;
+        line-height: 1.4;
     }
 
     .setting-tag {
@@ -760,6 +927,41 @@
 
     .styled-select:focus {
         border-color: #475569;
+    }
+
+    .styled-select.input-conflict {
+        border-color: rgba(239, 68, 68, 0.65) !important;
+        background: rgba(254, 242, 242, 0.9) !important;
+        color: #b91c1c !important;
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25);
+    }
+
+    .conflict-alert-banner {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        margin-bottom: 12px;
+        background: rgba(254, 242, 242, 0.85);
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        color: #b91c1c;
+    }
+
+    .conflict-alert-banner svg {
+        flex-shrink: 0;
+    }
+
+    .shortcut-conflict-msg {
+        font-size: 11px;
+        color: #dc2626;
+        margin-top: 3px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 500;
     }
 
     .hotkey-plus {
