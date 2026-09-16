@@ -48,6 +48,7 @@
 
     // 粘贴模式开关: true=Auto Paste, false=Not Paste
     let autoPaste = true;
+    let isProcessingPaste = false;
 
     // 当前编辑/父级节点
     let editingNode = null;
@@ -379,6 +380,7 @@
         EventsOn("show-settings", settingsEventListener);
         EventsOn("update-content", contentEventListener);
         EventsOn("window-shown", async () => {
+            isProcessingPaste = false;
             await loadSuggestions();
         });
     });
@@ -554,6 +556,10 @@
     // 焦点--------------------------------------------
     function handleBlur() {
         setTimeout(() => {
+            if (isProcessingPaste) {
+                return;
+            }
+
             if (document.hasFocus()) {
                 return;
             }
@@ -596,6 +602,7 @@
         if (item.id) {
             RecordItemUsage(item.id);
         }
+        isProcessingPaste = true;
         const content = item.value || '';
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
@@ -603,13 +610,21 @@
             } else {
                 HideAndRestore();
             }
-        }).catch(err => console.error("Slot copy failed:", err));
+        }).catch(err => {
+            console.error("Slot copy failed:", err);
+            if (autoPaste) {
+                PasteAndHide();
+            } else {
+                HideAndRestore();
+            }
+        });
     }
 
     function handleSearchResultClick(result) {
         if (result && result.id) {
             RecordItemUsage(result.id);
         }
+        isProcessingPaste = true;
         const content = typeof result === 'string' ? result : (result.content || '');
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
@@ -618,7 +633,14 @@
                 HideAndRestore();
             }
             searchQuery = "";
-        }).catch(err => console.error("Search copy failed:", err));
+        }).catch(err => {
+            console.error("Search copy failed:", err);
+            if (autoPaste) {
+                PasteAndHide();
+            } else {
+                HideAndRestore();
+            }
+        });
     }
 
     function getCapsuleBadgeLabel(idx) {
@@ -880,10 +902,10 @@
                     {#if searchResults.length > 0}
                         {#each searchResults as result}
                             <div class="search-result-item" 
-                                on:click={() => handleSearchResultClick(result.content)}
+                                on:click={() => handleSearchResultClick(result)}
                                 on:keydown={(e) => {
                                     if (e.key === 'Enter') {
-                                        handleSearchResultClick(result.content);
+                                        handleSearchResultClick(result);
                                     }
                                 }}
                             >

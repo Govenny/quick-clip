@@ -41,6 +41,10 @@ var (
 	procMonitorFromPoint           = user32.NewProc("MonitorFromPoint")
 	procGetMonitorInfoW            = user32.NewProc("GetMonitorInfoW")
 	procGetAncestor                = user32.NewProc("GetAncestor")
+	procKeybdEvent                 = user32.NewProc("keybd_event")
+	procBringWindowToTop           = user32.NewProc("BringWindowToTop")
+	procIsWindow                   = user32.NewProc("IsWindow")
+	procGetAsyncKeyState           = user32.NewProc("GetAsyncKeyState")
 	procQueryFullProcessImageNameW = kernel32.NewProc("QueryFullProcessImageNameW")
 )
 
@@ -85,6 +89,10 @@ func (a *Action) SetSelfHwnd(hwnd win.HWND) {
 	title := syscall.UTF16ToString(buf[:])
 	fmt.Printf("绑定句柄: %d, 标题: %s\n", hwnd, title)
 	a.selfHwnd = hwnd
+}
+
+func (a *Action) GetSelfHwnd() win.HWND {
+	return a.selfHwnd
 }
 
 func (a *Action) FindRealWailsWindow() win.HWND {
@@ -182,7 +190,7 @@ func (a *Action) ShowNoActivate() {
 func (a *Action) Hide() {
 	win.ShowWindow(a.selfHwnd, win.SW_HIDE)
 	if a.memoryTrimmer != nil {
-		a.memoryTrimmer.ScheduleTrim(5000 * time.Millisecond)
+		a.memoryTrimmer.ScheduleTrim(120 * time.Second)
 	}
 }
 
@@ -300,42 +308,52 @@ func CleanBrowserTitle(title string) string {
 	return title
 }
 
-// RestoreFocus 根据句柄恢复窗口焦点
-func (a *Action) RestoreFocus(hwnd win.HWND) {
+func isWindow(hwnd win.HWND) bool {
 	if hwnd == 0 {
+		return false
+	}
+	ret, _, _ := procIsWindow.Call(uintptr(hwnd))
+	return ret != 0
+}
+
+func isKeyDown(vk int) bool {
+	ret, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
+	return (ret & 0x8000) != 0
+}
+
+// RestoreFocus 根据句柄恢复目标窗口前台与焦点
+func (a *Action) RestoreFocus(hwnd win.HWND) {
+	if hwnd == 0 || hwnd == a.selfHwnd || !isWindow(hwnd) {
 		return
 	}
 
-	// 1. 获取当前线程ID和目标窗口的线程ID
-	// 这里的 0 是 GetCurrentThreadId 的意思（在某些封装中），但在 syscall 中我们需要显式调用
-	// 既然用了 tailscale/win，我们尽量复用它的，如果没有就用 syscall
-
-	// 获取当前线程 ID
-	curThreadID := win.GetCurrentThreadId()
-
-	// 获取目标窗口的线程 ID
-	var targetProcessID uint32
-	// win.GetWindowThreadProcessId 返回的是线程ID
-	targetThreadID := win.GetWindowThreadProcessId(hwnd, &targetProcessID)
-
-	// 2. 关键步骤：连接线程输入 (Attach)
-	// 如果目标线程和当前线程不同，才需要 Attach
-	if curThreadID != targetThreadID {
-		attachThreadInput(curThreadID, targetThreadID, true)
-		defer attachThreadInput(curThreadID, targetThreadID, false) // 确保函数结束时 Detach
-	}
-
-	// 3. 处理最小化情况
+	// 1. 如果窗口最小化，恢复它
 	if win.IsIconic(hwnd) {
 		win.ShowWindow(hwnd, win.SW_RESTORE)
-	} else {
-		win.ShowWindow(hwnd, win.SW_SHOW)
 	}
 
-	// 4. 设置前台窗口 & 设置焦点
-	// 因为已经 Attach 了线程，这时候 SetFocus 才有权限生效
+	// 2. 获取当前前台窗口线程ID与目标窗口线程ID
+	curFg := win.GetForegroundWindow()
+	var curThreadID uint32
+	if curFg != 0 {
+		curThreadID = win.GetWindowThreadProcessId(curFg, nil)
+	}
+	targetThreadID := win.GetWindowThreadProcessId(hwnd, nil)
+	selfThreadID := win.GetCurrentThreadId()
+
+	// 3. 附加线程输入，将前台权限平滑移交目标窗口
+	if curThreadID != 0 && curThreadID != targetThreadID {
+		procAttachThreadInput.Call(uintptr(curThreadID), uintptr(targetThreadID), 1)
+		defer procAttachThreadInput.Call(uintptr(curThreadID), uintptr(targetThreadID), 0)
+	}
+	if selfThreadID != targetThreadID {
+		procAttachThreadInput.Call(uintptr(selfThreadID), uintptr(targetThreadID), 1)
+		defer procAttachThreadInput.Call(uintptr(selfThreadID), uintptr(targetThreadID), 0)
+	}
+
+	// 4. 设置目标窗口为前台窗口（Windows 会自动激活它并保持/恢复输入框对焦）
+	// 注意：绝对不要调用 SetFocus(hwnd)，否则会把键盘焦点从浏览器输入框抢走
 	win.SetForegroundWindow(hwnd)
-	win.SetFocus(hwnd)
 }
 
 // 封装 AttachThreadInput 系统调用
@@ -356,38 +374,32 @@ const (
 	KEYEVENTF_KEYUP = 0x0002
 	VK_CONTROL      = 0x11
 	VK_V            = 0x56
+	VK_MENU         = 0x12 // Alt 键
 )
 
-// 如果上面的不行，试试这个原生 syscall 版本
+// SendPaste 模拟 Ctrl + V 粘贴按键
 func (a *Action) SendPaste() {
-	// 1. 稍微延时，等待窗口隐藏和焦点彻底回到原位
-	time.Sleep(150 * time.Millisecond)
+	// 1. 只有在物理 Alt 键仍被按下的情况下才释放，避免随意发送 Alt 导致浏览器输入框失焦
+	if isKeyDown(VK_MENU) {
+		procKeybdEvent.Call(uintptr(VK_MENU), 0, KEYEVENTF_KEYUP, 0)
+		time.Sleep(5 * time.Millisecond)
+	}
 
-	user32 := syscall.NewLazyDLL("user32.dll")
-	keybd := user32.NewProc("keybd_event")
-
-	const (
-		VK_CONTROL = 0x11
-		VK_V       = 0x56
-		VK_MENU    = 0x12 // Alt 键
-		KEYUP      = 0x0002
-	)
-
-	// 2. 【关键】强制松开物理 Alt 键
-	// 如果用户按住 Alt+Space 触发，点击时 Alt 可能还没松开
-	// 模拟一次 Alt 的 KeyUp，确保环境“干净”
-	keybd.Call(uintptr(VK_MENU), 0, KEYUP, 0)
-
-	// 3. 开始模拟 Ctrl + V
+	// 2. 开始模拟 Ctrl + V，微小间隔保证消息队列准确捕获按键序列
 	// 按下 Ctrl
-	keybd.Call(uintptr(VK_CONTROL), 0, 0, 0)
+	procKeybdEvent.Call(uintptr(VK_CONTROL), 0, 0, 0)
+	time.Sleep(10 * time.Millisecond)
+
 	// 按下 V
-	keybd.Call(uintptr(VK_V), 0, 0, 0)
+	procKeybdEvent.Call(uintptr(VK_V), 0, 0, 0)
+	time.Sleep(15 * time.Millisecond)
 
 	// 松开 V
-	keybd.Call(uintptr(VK_V), 0, KEYUP, 0)
+	procKeybdEvent.Call(uintptr(VK_V), 0, KEYEVENTF_KEYUP, 0)
+	time.Sleep(10 * time.Millisecond)
+
 	// 松开 Ctrl
-	keybd.Call(uintptr(VK_CONTROL), 0, KEYUP, 0)
+	procKeybdEvent.Call(uintptr(VK_CONTROL), 0, KEYEVENTF_KEYUP, 0)
 
 	fmt.Println("粘贴指令已发送")
 }

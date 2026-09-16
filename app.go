@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"quick-clip/internal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/tailscale/win"
@@ -197,7 +198,39 @@ func (a *App) ToggleWindow() {
 		a.isVisible = false
 		a.action.Hide()
 	} else {
-		a.lastHwnd = a.action.RecordActiveWindow()
+		fg := a.action.RecordActiveWindow()
+		var fgPid uint32
+		if fg != 0 {
+			win.GetWindowThreadProcessId(fg, &fgPid)
+		}
+		if fg != 0 && fg != a.action.GetSelfHwnd() && fgPid != uint32(syscall.Getpid()) {
+			a.lastHwnd = fg
+		}
+		procName, title := a.action.GetWindowContext(a.lastHwnd)
+		cKey := internal.GenerateContextKey(procName, title)
+		a.contextMu.Lock()
+		a.currentContextKey = cKey
+		a.contextMu.Unlock()
+
+		a.isVisible = true
+		a.action.ShowNoActivate()
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "window-shown", cKey)
+		}
+	}
+}
+
+// ShowWindow 供托盘等外部入口唤出窗口并正确记录上一焦点窗口
+func (a *App) ShowWindow() {
+	if !a.isVisible {
+		fg := a.action.RecordActiveWindow()
+		var fgPid uint32
+		if fg != 0 {
+			win.GetWindowThreadProcessId(fg, &fgPid)
+		}
+		if fg != 0 && fg != a.action.GetSelfHwnd() && fgPid != uint32(syscall.Getpid()) {
+			a.lastHwnd = fg
+		}
 		procName, title := a.action.GetWindowContext(a.lastHwnd)
 		cKey := internal.GenerateContextKey(procName, title)
 		a.contextMu.Lock()
@@ -218,19 +251,27 @@ func (a *App) HideWindow() {
 }
 
 func (a *App) PasteAndHide() {
-	// 1. 隐藏窗口
 	a.isVisible = false
+
+	// 1. 先隐藏自身窗口，离开屏幕与前台
 	a.action.Hide()
 
-	// 2. 恢复焦点
-	a.action.RestoreFocus(a.lastHwnd)
+	// 2. 将目标窗口平滑恢复至前台与激活焦点
+	targetHwnd := a.lastHwnd
+	a.action.RestoreFocus(targetHwnd)
 
-	// 3. 等待并粘贴
-	time.Sleep(time.Duration(a.config.Shortcuts.PasteWaitTime) * time.Millisecond)
-	go a.action.SendPaste()
+	// 3. 后台异步等待目标应用激活就绪后执行粘贴，不阻塞前端 IPC
+	waitTime := a.config.Shortcuts.PasteWaitTime
+	if waitTime < 50 {
+		waitTime = 50
+	}
+	go func() {
+		time.Sleep(time.Duration(waitTime) * time.Millisecond)
+		a.action.SendPaste()
+	}()
 }
 
-// HideAndRestore 只隐藏+恢复焦点，不执行粘贴
+// HideAndRestore 只恢复焦点+隐藏，不执行粘贴
 func (a *App) HideAndRestore() {
 	a.isVisible = false
 	a.action.Hide()

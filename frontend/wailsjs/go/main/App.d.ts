@@ -38,6 +38,8 @@ export function SetFontSizeLevel(arg1:number):Promise<void>;
 
 export function SetOpacity(arg1:number):Promise<void>;
 
+export function ShowWindow():Promise<void>;
+
 export function ToggleWindow():Promise<void>;
 
 export function UnpinSlot(arg1:number):Promise<void>;
