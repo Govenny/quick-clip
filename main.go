@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"quick-clip/internal"
+	"runtime/debug"
 	"strings"
 
 	"github.com/wailsapp/wails/v2"
@@ -19,6 +20,10 @@ import (
 var assets embed.FS
 
 func main() {
+	// 内存优化：限制 Go 堆内存无节制膨胀，保持在紧凑水位，避免占用过多常驻物理内存
+	debug.SetGCPercent(25)
+	debug.SetMemoryLimit(30 * 1024 * 1024)
+
 	// 优化 Chromium / WebView2 启动参数，显著降低后台常驻与网络开销，同时保证流畅响应
 	existingArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
 	optArgs := []string{
@@ -49,10 +54,23 @@ func main() {
 
 	// Create application with options
 	windowWidth := config.Window.Width
+	windowHeight := config.Window.Height
+	lvl := config.Appearance.FontSizeLevel
+	if lvl < 1 || lvl > 5 {
+		lvl = 2
+	}
+	if defSize, ok := FontSizeWindowSizes[lvl]; ok {
+		// 若保存的尺寸异常偏离档位尺寸（如系统 DPI 重复缩放后残留的失真数据），自动修正为当前档位推荐尺寸
+		if windowWidth <= 0 || windowHeight <= 0 || windowWidth < defSize[0]-35 || windowWidth > defSize[0]+35 || windowHeight < defSize[1]-35 || windowHeight > defSize[1]+35 {
+			windowWidth = defSize[0]
+			windowHeight = defSize[1]
+			config.Window.Width = windowWidth
+			config.Window.Height = windowHeight
+		}
+	}
 	if windowWidth <= 0 {
 		windowWidth = 420
 	}
-	windowHeight := config.Window.Height
 	if windowHeight <= 0 {
 		windowHeight = 580
 	}

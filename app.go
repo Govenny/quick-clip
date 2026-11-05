@@ -34,6 +34,9 @@ type App struct {
 	hotkeyMu       sync.Mutex
 	currentHotkey  *hotkey.Hotkey
 	hotkeyStopChan chan struct{}
+
+	pasteMu       sync.Mutex
+	lastPasteTime time.Time
 }
 
 // NewApp creates a new App application struct
@@ -91,6 +94,31 @@ func (a *App) startup(ctx context.Context) {
 					a.action.SetSelfHwnd(rootHwnd)
 					a.action.SetOnResized(a.persistWindowSize)
 					a.action.InstallResizeTracker(rootHwnd)
+
+					// 启动时初始化窗口尺寸，杜绝 Windows DPI 缩放放大导致的尺寸偏大与越界
+					a.action.SetResizeSuppressed(true)
+					targetW := a.config.Window.Width
+					targetH := a.config.Window.Height
+					lvl := a.config.Appearance.FontSizeLevel
+					if lvl < 1 || lvl > 5 {
+						lvl = 2
+					}
+					if defSize, ok := FontSizeWindowSizes[lvl]; ok {
+						// 若存储的尺寸异常偏大偏小或缺失，以档位标准尺寸为准
+						if targetW <= 0 || targetH <= 0 || targetW < defSize[0]-35 || targetW > defSize[0]+35 || targetH < defSize[1]-35 || targetH > defSize[1]+35 {
+							targetW = defSize[0]
+							targetH = defSize[1]
+							a.config.Window.Width = targetW
+							a.config.Window.Height = targetH
+							if a.configManager != nil {
+								_ = a.configManager.Save(a.config)
+							}
+						}
+					}
+					a.action.SetSizeNative(targetW, targetH)
+					time.AfterFunc(800*time.Millisecond, func() {
+						a.action.SetResizeSuppressed(false)
+					})
 
 					// 初始化完成后立即隐藏
 					a.action.Hide()
@@ -251,6 +279,16 @@ func (a *App) HideWindow() {
 }
 
 func (a *App) PasteAndHide() {
+	// 后台并发与连击防抖：300ms 内禁止重复触发粘贴，坚决杜绝回车输入密码等快捷键时粘贴两次
+	a.pasteMu.Lock()
+	now := time.Now()
+	if now.Sub(a.lastPasteTime) < 300*time.Millisecond {
+		a.pasteMu.Unlock()
+		return
+	}
+	a.lastPasteTime = now
+	a.pasteMu.Unlock()
+
 	a.isVisible = false
 
 	// 1. 先隐藏自身窗口，离开屏幕与前台
@@ -305,7 +343,11 @@ func (a *App) SetFontSizeLevel(level int) {
 		if target, ok := FontSizeWindowSizes[level]; ok {
 			a.config.Window.Width = target[0]
 			a.config.Window.Height = target[1]
+			a.action.SetResizeSuppressed(true)
 			a.action.SetSizeNative(target[0], target[1])
+			time.AfterFunc(600*time.Millisecond, func() {
+				a.action.SetResizeSuppressed(false)
+			})
 		}
 		if a.configManager != nil {
 			_ = a.configManager.Save(a.config)

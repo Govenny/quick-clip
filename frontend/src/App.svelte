@@ -598,11 +598,12 @@
 
     function handleSlotClick(slot) {
         if (!slot || slot.type === 'empty' || !slot.item) return;
+        if (isProcessingPaste) return;
+        isProcessingPaste = true;
         const item = slot.item;
         if (item.id) {
             RecordItemUsage(item.id);
         }
-        isProcessingPaste = true;
         const content = item.value || '';
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
@@ -621,10 +622,12 @@
     }
 
     function handleSearchResultClick(result) {
+        if (!result) return;
+        if (isProcessingPaste) return;
+        isProcessingPaste = true;
         if (result && result.id) {
             RecordItemUsage(result.id);
         }
-        isProcessingPaste = true;
         const content = typeof result === 'string' ? result : (result.content || '');
         navigator.clipboard.writeText(content).then(() => {
             if (autoPaste) {
@@ -640,6 +643,7 @@
             } else {
                 HideAndRestore();
             }
+            searchQuery = "";
         });
     }
 
@@ -698,6 +702,9 @@
     }
 
     function handleGlobalKeydown(e) {
+        if (isProcessingPaste) {
+            return;
+        }
         if (showTextInput || showDirInput || showDeleteConfirm || showSlotConfirm || showSettings) {
             return;
         }
@@ -709,6 +716,7 @@
         if (activeSlotsCount === 1 && !searchQuery.trim()) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                e.stopPropagation();
                 handleSlotClick(activeSlots[0]);
                 return;
             }
@@ -720,6 +728,7 @@
                 const slot = capsuleSlots[i];
                 if (slot && slot.type !== 'empty' && slot.item) {
                     e.preventDefault();
+                    e.stopPropagation();
                     handleSlotClick(slot);
                     return;
                 }
@@ -729,6 +738,10 @@
 
     function handleSearchKeydown(e) {
         if (e.key === 'Enter') {
+            e.stopPropagation(); // 阻止向 window 冒泡，坚决杜绝回车输入时触发两次复制粘贴
+            if (isProcessingPaste) {
+                return;
+            }
             if (searchQuery.trim()) {
                 if (searchResults.length > 0) {
                     e.preventDefault();

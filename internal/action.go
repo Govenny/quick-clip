@@ -172,6 +172,26 @@ func (a *Action) ShowNoActivate() {
 	x := mi.Work.Left + (monW-appW)/2
 	y := mi.Work.Top + (monH-appH)/2
 
+	// 安全边界约束：坚决杜绝上边框突到电脑桌面以外导致无法点击菜单或设置
+	if y < mi.Work.Top {
+		y = mi.Work.Top + 15
+	}
+	if y+appH > mi.Work.Bottom {
+		y = mi.Work.Bottom - appH - 15
+		if y < mi.Work.Top {
+			y = mi.Work.Top + 15
+		}
+	}
+	if x < mi.Work.Left {
+		x = mi.Work.Left + 15
+	}
+	if x+appW > mi.Work.Right {
+		x = mi.Work.Right - appW - 15
+		if x < mi.Work.Left {
+			x = mi.Work.Left + 15
+		}
+	}
+
 	// 6. 移动并显示
 	// 确保移除 SWP_NOMOVE
 	win.SetWindowPos(
@@ -190,7 +210,7 @@ func (a *Action) ShowNoActivate() {
 func (a *Action) Hide() {
 	win.ShowWindow(a.selfHwnd, win.SW_HIDE)
 	if a.memoryTrimmer != nil {
-		a.memoryTrimmer.ScheduleTrim(120 * time.Second)
+		a.memoryTrimmer.ScheduleTrim(15 * time.Second)
 	}
 }
 

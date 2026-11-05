@@ -49,6 +49,7 @@
 	function handleKeyCopy(e, text) {
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
+			e.stopPropagation();
 			copyToClipboard(text);
 		}
 	}
